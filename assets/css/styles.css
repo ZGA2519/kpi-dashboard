@@ -212,4 +212,12 @@ button:active { transition: transform 0.05s ease-out; }
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Loading spinners convey essential, ongoing status — they are the
+     accepted exception to reduced-motion and must keep turning. */
+  .animate-spin,
+  .kpi-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
 }

@@ -184,9 +184,13 @@
                          rounded-full bg-amber-500 px-1 text-xs font-bold text-white leading-none"></span>
           </button>
           <button id="btn-logout"
-                  class="touch-target hidden flex items-center justify-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700
-                         hover:bg-slate-50 active:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
-            Log out
+                  class="touch-target hidden flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700
+                         hover:bg-slate-50 active:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400
+                         disabled:cursor-not-allowed disabled:opacity-60">
+            <!-- Spinner — shown while the logout API call is in flight -->
+            <span id="logout-spinner"
+                  class="hidden h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600"></span>
+            <span id="logout-label">Log out</span>
           </button>
         </div>
       </div>

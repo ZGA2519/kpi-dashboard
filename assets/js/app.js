@@ -968,9 +968,19 @@ function wireStaticUI() {
     });
   }
 
-  // Logout button
+  // Logout button — show a loading state while the logout API call is in
+  // flight. logout() ends by redirecting to login.html, so the spinner stays
+  // visible right up until the page navigates away (no need to reset it).
   var btnLogout = document.getElementById("btn-logout");
-  if (btnLogout) btnLogout.addEventListener("click", function () { logout(); });
+  if (btnLogout) btnLogout.addEventListener("click", function () {
+    if (btnLogout.disabled) return; // ignore double-clicks
+    btnLogout.disabled = true;
+    var spinner = document.getElementById("logout-spinner");
+    var label   = document.getElementById("logout-label");
+    if (spinner) spinner.classList.remove("hidden");
+    if (label)   label.textContent = "Logging out…";
+    logout();
+  });
 
   // Sync button
   var btnSync = document.getElementById("btn-sync");
