@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>KPI Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="assets/css/styles.css" />
   <script>
     tailwind.config = {
+      // Touch devices have no hover; don't let hover: styles "stick" on tap.
+      future: { hoverOnlyWhenSupported: true },
       theme: {
         extend: {
           colors: {
@@ -141,10 +143,10 @@
   <div id="app" class="hidden min-h-screen bg-slate-50">
 
     <!-- HEADER -->
-    <header class="border-b border-slate-200 bg-white">
-      <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
-        <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
+    <header class="app-header border-b border-slate-200 bg-white">
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4 lg:px-8">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white">
             <!-- Grid icon (inline SVG — no external dependency) -->
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -152,19 +154,19 @@
               <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
             </svg>
           </div>
-          <div>
-            <h1 class="text-lg font-semibold leading-tight">KPI Dashboard</h1>
-            <p class="text-xs text-slate-500">Track and manage your project progressions</p>
+          <div class="min-w-0">
+            <h1 class="truncate text-base font-semibold leading-tight sm:text-lg">KPI Dashboard</h1>
+            <p class="hidden text-xs text-slate-500 sm:block">Track and manage your projects</p>
           </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex shrink-0 items-center gap-2 sm:gap-3">
           <span id="header-username" class="hidden text-sm text-slate-500"></span>
           <!-- Sync status + button -->
-          <span id="sync-status" class="hidden text-xs text-slate-400 whitespace-nowrap"></span>
+          <span id="sync-status" class="hidden text-xs text-slate-500 whitespace-nowrap"></span>
           <button id="btn-sync"
-                  class="hidden relative flex items-center gap-1.5 rounded-md border border-slate-300 bg-white
-                         px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50
-                         focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-60">
+                  class="touch-target hidden relative flex items-center justify-center gap-1.5 rounded-md border border-slate-300 bg-white
+                         px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 active:bg-slate-100
+                         focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-60 sm:px-3">
             <!-- Spinner (shown while syncing) -->
             <span id="sync-spinner"
                   class="hidden h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600"></span>
@@ -182,8 +184,8 @@
                          rounded-full bg-amber-500 px-1 text-xs font-bold text-white leading-none"></span>
           </button>
           <button id="btn-logout"
-                  class="hidden rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700
-                         hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+                  class="touch-target hidden flex items-center justify-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700
+                         hover:bg-slate-50 active:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
             Log out
           </button>
         </div>
@@ -196,10 +198,10 @@
            SECTION 1 — STAT CARDS
            ===================================================== -->
       <section id="section-stat-cards" aria-label="Overall statistics">
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
 
           <!-- Total Projects -->
-          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div class="flex items-start justify-between">
               <span class="text-sm text-slate-500">Total Projects</span>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" viewBox="0 0 24 24"
@@ -215,7 +217,7 @@
           </div>
 
           <!-- Completed -->
-          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div class="flex items-start justify-between">
               <span class="text-sm text-slate-500">Completed</span>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 24 24"
@@ -231,7 +233,7 @@
           </div>
 
           <!-- In Progress -->
-          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div class="flex items-start justify-between">
               <span class="text-sm text-slate-500">In Progress</span>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 24 24"
@@ -247,7 +249,7 @@
           </div>
 
           <!-- Avg Progress -->
-          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div class="flex items-start justify-between">
               <span class="text-sm text-slate-500">Avg. Progress</span>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500" viewBox="0 0 24 24"
@@ -268,13 +270,13 @@
       <!-- =====================================================
            SECTION 2 — PROJECT CARDS
            ===================================================== -->
-      <section id="section-project-cards" aria-label="All Progressions">
-        <h2 class="text-lg font-semibold mb-4">All Progressions</h2>
+      <section id="section-project-cards" aria-label="All Projects">
+        <h2 class="text-lg font-semibold mb-4">All Projects</h2>
 
         <!-- Filters toolbar -->
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <!-- Search -->
-          <div class="relative max-w-sm flex-1">
+          <div class="relative w-full sm:max-w-sm sm:flex-1">
             <svg xmlns="http://www.w3.org/2000/svg"
                  class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none"
                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -283,16 +285,18 @@
             </svg>
             <input id="filter-search"
                    type="text"
-                   placeholder="Search progressions…"
+                   placeholder="Search projects…"
                    class="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm
-                          placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" />
+                          placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" />
           </div>
 
-          <div class="flex items-center gap-2">
+          <!-- Phone: 2-col grid (selects share a row, Add New spans full width below).
+               sm+: inline flex row. -->
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:items-center">
             <!-- Status filter -->
             <select id="filter-status"
-                    class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm
-                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+                    class="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 sm:w-auto">
               <option value="all">All Status</option>
               <option value="not-started">Not Started</option>
               <option value="in-progress">In Progress</option>
@@ -302,8 +306,8 @@
 
             <!-- Priority filter -->
             <select id="filter-priority"
-                    class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm
-                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+                    class="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 sm:w-auto">
               <option value="all">All Priority</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>
@@ -312,8 +316,8 @@
 
             <!-- Add New button -->
             <button id="btn-add-project"
-                    class="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium
-                           text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                    class="touch-target col-span-2 flex w-full items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium
+                           text-white hover:bg-slate-700 active:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 sm:col-span-1 sm:w-auto">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -349,11 +353,11 @@
                 <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
                 <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
               </svg>
-              All Goals
+              All Projects
             </span>
             <button id="btn-details-new-project"
-                    class="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium
-                           text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500">
+                    class="touch-target flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium
+                           text-white hover:bg-slate-700 active:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"
                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -362,12 +366,11 @@
             </button>
           </div>
 
-          <!-- Table header -->
-          <div class="grid grid-cols-12 gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2 text-xs font-medium text-slate-500">
-            <div class="col-span-5">Goal</div>
-            <div class="col-span-2">Category</div>
+          <!-- Table header — hidden on phone, where rows reflow into stacked blocks -->
+          <div class="hidden grid-cols-12 gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2 text-xs font-medium text-slate-500 sm:grid">
+            <div class="col-span-6">Name</div>
             <div class="col-span-2">Completed</div>
-            <div class="col-span-3">Progress</div>
+            <div class="col-span-4">Progress</div>
           </div>
 
           <!-- Table body — A4 populates this -->
@@ -396,7 +399,8 @@
          data-project-id="">
       <!-- Delete button -->
       <button class="project-card-delete-btn absolute right-2 top-2 flex h-8 w-8 items-center justify-center
-                     rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 focus:outline-none"
+                     rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 focus:outline-none
+                     focus-visible:ring-2 focus-visible:ring-slate-400"
               data-action="delete-project" data-project-id="" aria-label="Delete project">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" viewBox="0 0 24 24"
              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -430,7 +434,7 @@
       </div>
 
       <!-- Dates -->
-      <div class="mt-4 flex items-center justify-between text-xs text-slate-400">
+      <div class="mt-4 flex items-center justify-between text-xs text-slate-500">
         <span>Created: <span class="project-card-created-at"></span></span>
         <span>Updated: <span class="project-card-updated-at"></span></span>
       </div>
@@ -440,13 +444,14 @@
   <!-- Details table — project row template -->
   <template id="tpl-details-project-row">
     <div class="details-project-row" data-project-id="">
-      <!-- Project header row -->
-      <div class="grid grid-cols-12 gap-2 px-4 py-2.5 hover:bg-slate-50 cursor-pointer"
+      <!-- Project header row — flex-wrap stack on phone, 12-col grid on sm+ -->
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 hover:bg-slate-50 active:bg-slate-50 cursor-pointer sm:grid sm:grid-cols-12 sm:gap-2 sm:py-2.5"
            data-action="toggle-project-row" data-project-id="">
-        <div class="col-span-5 flex items-center gap-2">
+        <div class="flex min-w-0 flex-1 items-center gap-2 sm:col-span-6 sm:flex-none">
           <!-- Chevron toggle -->
-          <button class="details-chevron flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200
-                         focus:outline-none transition-transform" data-action="toggle-project-row" data-project-id=""
+          <button class="details-chevron flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-slate-200
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 transition-transform sm:h-5 sm:w-5"
+                  data-action="toggle-project-row" data-project-id=""
                   aria-label="Expand/collapse tasks">
             <!-- down chevron (default expanded) -->
             <svg class="chevron-down h-4 w-4 text-slate-400 transition-transform" xmlns="http://www.w3.org/2000/svg"
@@ -460,18 +465,15 @@
                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
-          <span class="details-project-title text-sm font-medium text-slate-900 truncate"></span>
+          <span class="details-project-title truncate text-sm font-medium text-slate-900"></span>
         </div>
-        <div class="col-span-2 flex items-center">
-          <span class="text-sm text-slate-400">—</span>
-        </div>
-        <div class="col-span-2 flex items-center">
+        <div class="flex items-center sm:col-span-2">
           <!-- Disabled checkbox — reflects completed status -->
           <input type="checkbox" class="details-project-completed-check h-4 w-4 rounded border-slate-300
-                                        accent-emerald-500 cursor-default" disabled />
+                                        accent-emerald-500 cursor-default" disabled aria-label="Project completion status" />
         </div>
-        <div class="col-span-3 flex items-center gap-2">
-          <span class="details-project-progress-pct text-sm font-medium text-emerald-600"></span>
+        <div class="flex w-full items-center gap-2 sm:col-span-4 sm:w-auto">
+          <span class="details-project-progress-pct text-sm font-medium text-emerald-700"></span>
           <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
             <div class="details-project-progress-bar h-full bg-emerald-500 transition-all" style="width:0%"></div>
           </div>
@@ -484,18 +486,19 @@
 
         <!-- Add-task trigger row (always last inside details-task-rows) -->
         <div class="details-add-task-trigger">
-          <button class="details-add-task-btn flex w-full items-center gap-2 px-4 py-2 pl-11 text-sm
-                         text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none"
+          <button class="details-add-task-btn flex w-full items-center gap-2 px-4 py-2.5 pl-11 text-sm
+                         text-slate-500 hover:bg-slate-100 hover:text-slate-700 active:bg-slate-100
+                         focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-400"
                   data-action="show-add-task-input" data-project-id="">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            New sub-item
+            New task
           </button>
-          <!-- Inline add-task form (hidden by default) -->
-          <div class="details-add-task-form hidden grid grid-cols-12 gap-2 px-4 py-2">
-            <div class="col-span-7 flex items-center gap-2 pl-7">
+          <!-- Inline add-task form — stacks on phone, 12-col grid on sm+ (hidden by default) -->
+          <div class="details-add-task-form hidden flex flex-col gap-2 px-4 py-2 sm:grid sm:grid-cols-12">
+            <div class="flex items-center gap-2 pl-7 sm:col-span-7">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24"
                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -508,12 +511,12 @@
                      data-action="new-task-input"
                      data-project-id="" />
             </div>
-            <div class="col-span-5 flex items-center gap-1">
-              <button class="details-add-task-confirm-btn rounded bg-slate-900 px-2.5 py-1 text-xs font-medium
-                             text-white hover:bg-slate-700 focus:outline-none"
+            <div class="flex items-center gap-2 pl-7 sm:col-span-5 sm:pl-0">
+              <button class="details-add-task-confirm-btn touch-target flex flex-1 items-center justify-center rounded bg-slate-900 px-2.5 py-1 text-xs font-medium
+                             text-white hover:bg-slate-700 active:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 sm:flex-none"
                       data-action="confirm-add-task" data-project-id="">Add</button>
-              <button class="details-add-task-cancel-btn rounded border border-slate-300 px-2.5 py-1 text-xs
-                             font-medium text-slate-700 hover:bg-slate-100 focus:outline-none"
+              <button class="details-add-task-cancel-btn touch-target flex flex-1 items-center justify-center rounded border border-slate-300 px-2.5 py-1 text-xs
+                             font-medium text-slate-700 hover:bg-slate-100 active:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 sm:flex-none"
                       data-action="cancel-add-task" data-project-id="">Cancel</button>
             </div>
           </div>
@@ -522,36 +525,39 @@
     </div>
   </template>
 
-  <!-- Details table — task row template -->
+  <!-- Details table — task row template.
+       Phone: flex row [checkbox][title][delete], tiny progress hidden.
+       sm+: original 12-col grid. -->
   <template id="tpl-details-task-row">
-    <div class="details-task-row group grid grid-cols-12 gap-2 px-4 py-2 hover:bg-slate-100/60"
+    <div class="details-task-row group flex items-center gap-3 py-3 pl-7 pr-4 hover:bg-slate-100/60 active:bg-slate-100/60 sm:grid sm:grid-cols-12 sm:gap-2 sm:px-4 sm:py-2"
          data-task-id="">
-      <div class="col-span-5 flex items-center gap-2 pl-7">
+      <div class="flex min-w-0 flex-1 cursor-text items-center gap-2 order-2 sm:order-none sm:col-span-6 sm:flex-none sm:pl-7"
+           data-action="edit-task">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24"
              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
           <polyline points="14 2 14 8 20 8"/>
         </svg>
-        <span class="task-title text-sm"></span>
+        <span class="task-title -mx-1 truncate rounded px-1 text-sm hover:bg-slate-200/70" title="Click to rename"></span>
+        <input type="text"
+               class="task-title-input hidden h-7 w-full min-w-0 flex-1 rounded border border-slate-300 px-2 text-sm
+                      focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+               data-action="task-title-input" data-task-id="" data-project-id="" aria-label="Rename task" />
       </div>
-      <div class="col-span-2 flex items-center">
-        <span class="text-sm text-slate-400">—</span>
-      </div>
-      <div class="col-span-2 flex items-center">
+      <div class="flex items-center order-1 sm:order-none sm:col-span-2">
         <input type="checkbox"
-               class="task-completed-checkbox h-4 w-4 rounded border-slate-300 accent-blue-500 cursor-pointer"
-               data-action="toggle-task" data-task-id="" data-project-id="" />
+               class="task-completed-checkbox h-4 w-4 rounded border-slate-300 accent-emerald-500 cursor-pointer"
+               data-action="toggle-task" data-task-id="" data-project-id="" aria-label="Toggle task complete" />
       </div>
-      <div class="col-span-3 flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
-          <span class="task-progress-pct text-sm text-slate-500"></span>
+      <div class="flex items-center justify-end gap-2 order-3 sm:order-none sm:col-span-4 sm:justify-between">
+        <div class="hidden items-center gap-2 sm:flex">
+          <span class="task-progress-pct text-sm font-medium text-emerald-700"></span>
           <div class="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
-            <div class="task-progress-bar h-full bg-slate-400 transition-all" style="width:0%"></div>
+            <div class="task-progress-bar h-full bg-emerald-500 transition-all" style="width:0%"></div>
           </div>
         </div>
-        <button class="task-delete-btn flex h-6 w-6 items-center justify-center rounded text-slate-300
-                       opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500
-                       focus:outline-none transition-opacity"
+        <button class="task-delete-btn flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400
+                       hover:bg-red-50 hover:text-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 transition-opacity"
                 data-action="delete-task" data-task-id="" data-project-id="" aria-label="Delete task">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" viewBox="0 0 24 24"
                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -568,12 +574,12 @@
        MODAL — Add / Edit Project
        ========================================================= -->
   <div id="modal-project-form"
-       class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm"
+       class="modal-sheet fixed inset-0 z-50 hidden items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
        role="dialog" aria-modal="true" aria-labelledby="modal-form-title">
     <!-- Backdrop click closes modal — handled by A4 -->
     <div class="modal-backdrop absolute inset-0"></div>
 
-    <div class="modal-panel relative w-full max-w-lg rounded-xl bg-white shadow-xl mx-4">
+    <div class="modal-panel relative max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl sm:mx-4">
       <!-- Modal header -->
       <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
         <div>
@@ -582,7 +588,7 @@
         </div>
         <button id="modal-form-close-btn"
                 class="flex h-8 w-8 items-center justify-center rounded-md text-slate-400
-                       hover:bg-slate-100 hover:text-slate-700 focus:outline-none"
+                       hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
                 data-action="close-modal-form" aria-label="Close">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -602,7 +608,7 @@
           <input type="text" id="form-project-title" name="title" required
                  placeholder="Enter project title"
                  class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm
-                        placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" />
+                        placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" />
           <p id="form-title-error" class="hidden text-xs text-red-600"></p>
         </div>
 
@@ -612,7 +618,7 @@
           <textarea id="form-project-description" name="description" rows="3"
                     placeholder="Describe the project…"
                     class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm
-                           placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none"></textarea>
+                           placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none"></textarea>
         </div>
 
         <!-- Status + Priority row -->
@@ -647,13 +653,13 @@
         <div class="flex justify-end gap-2 pt-2">
           <button type="button" id="modal-form-cancel-btn"
                   data-action="close-modal-form"
-                  class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium
-                         text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+                  class="touch-target flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium
+                         text-slate-700 hover:bg-slate-50 active:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
             Cancel
           </button>
           <button type="submit" id="modal-form-submit-btn"
-                  class="flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium
-                         text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:opacity-60">
+                  class="touch-target flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium
+                         text-white hover:bg-slate-700 active:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:opacity-60">
             <span id="modal-form-submit-spinner"
                   class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
             <span id="modal-form-submit-label">Add Project</span>
@@ -675,27 +681,29 @@
       <h2 id="dialog-delete-title" class="text-base font-semibold text-slate-900">Delete Project</h2>
       <p class="mt-2 text-sm text-slate-600">
         Are you sure you want to delete
-        <span id="dialog-delete-project-name" class="font-medium text-slate-900"></span>?
-        This will also delete all associated tasks. This action cannot be undone.
+        <span id="dialog-delete-name" class="font-medium text-slate-900"></span>?<span id="dialog-delete-extra"></span>
+        This action cannot be undone.
       </p>
 
       <!-- Error slot -->
       <p id="dialog-delete-error" class="hidden mt-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200"></p>
 
-      <!-- Hidden field for project id -->
+      <!-- Hidden fields — "type" routes the confirm handler (project vs task) -->
+      <input type="hidden" id="dialog-delete-type" value="" />
       <input type="hidden" id="dialog-delete-project-id" value="" />
+      <input type="hidden" id="dialog-delete-task-id" value="" />
 
       <div class="mt-5 flex justify-end gap-2">
         <button id="dialog-delete-cancel-btn"
                 data-action="close-dialog-delete"
-                class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium
-                       text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+                class="touch-target flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium
+                       text-slate-700 hover:bg-slate-50 active:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
           Cancel
         </button>
         <button id="dialog-delete-confirm-btn"
                 data-action="confirm-delete"
-                class="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium
-                       text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60">
+                class="touch-target flex items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium
+                       text-white hover:bg-red-700 active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60">
           <span id="dialog-delete-spinner"
                 class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
           Delete

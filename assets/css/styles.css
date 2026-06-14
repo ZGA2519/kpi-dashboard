@@ -6,20 +6,6 @@
  */
 
 /* ---------------------------------------------------------------
-   Status badge colour tokens
-   (used by A4 when injecting project-card-status-badge classes)
-   --------------------------------------------------------------- */
-.badge-status-not-started  { background-color: #f1f5f9; color: #475569; }
-.badge-status-in-progress  { background-color: #d1fae5; color: #065f46; }
-.badge-status-completed    { background-color: #bbf7d0; color: #14532d; }
-.badge-status-on-hold      { background-color: #fef3c7; color: #92400e; }
-
-/* Priority badge colour tokens */
-.badge-priority-low        { background-color: #f1f5f9; color: #475569; }
-.badge-priority-medium     { background-color: #ffedd5; color: #9a3412; }
-.badge-priority-high       { background-color: #fee2e2; color: #991b1b; }
-
-/* ---------------------------------------------------------------
    Modal / dialog open state
    A4 toggles these by replacing 'hidden' with 'flex' on the overlay.
    The .modal-open helper lets JS do: el.classList.add('modal-open')
@@ -85,3 +71,145 @@
 ::-webkit-scrollbar-track      { background: #f1f5f9; }
 ::-webkit-scrollbar-thumb      { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover{ background: #94a3b8; }
+
+/* ===============================================================
+   RESPONSIVE / TOUCH ADAPTATION  (phone + tablet)
+   ---------------------------------------------------------------
+   Added by /impeccable adapt. Mobile-first refinements the Tailwind
+   utility layer can't express cleanly: pointer/hover gating, iOS
+   zoom prevention, touch-target sizing, bottom-sheet modals, safe
+   areas, and a reduced-motion guard. The dashboard is built
+   desktop-first in markup; everything below makes it a first-class
+   citizen on phones (320px+) and tablets (touch input, real edits).
+   =============================================================== */
+
+/* Stop mobile browsers inflating text on orientation change. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Kill the grey tap-flash; we supply our own :active feedback below. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The inline add-task form toggles via the `hidden` class (JS), but it also
+   carries `sm:grid` for its shown layout — and a responsive variant outranks
+   base `hidden` at >=640px. Keep `hidden` authoritative so the form stays
+   collapsed until the trigger is tapped. */
+.details-add-task-form.hidden { display: none; }
+
+/* Sticky app header — keeps Sync / Add reachable while scrolling a
+   long list, and honours the notch via the safe-area inset. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;                                  /* header < modal-backdrop (50) */
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Tap feedback for primary buttons on touch (no hover to lean on). */
+button:active { transition: transform 0.05s ease-out; }
+.touch-target:active { transform: scale(0.97); }
+
+/* --- Coarse pointer (touch) refinements ----------------------- */
+@media (pointer: coarse) {
+  /* iOS Safari zooms the viewport when a focused field is < 16px.
+     Force 16px on all text fields, and guarantee a 44px hit height. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+
+  /* 44px minimum on the interactive controls flagged in markup. */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* The task checkbox is a primary edit action — enlarge it. */
+  .task-completed-checkbox,
+  .details-project-completed-check {
+    width: 1.35rem;
+    height: 1.35rem;
+  }
+
+  /* Compact icon buttons get a bigger, thumb-friendly box. */
+  .task-delete-btn,
+  .project-card-delete-btn {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+}
+
+/* --- Task-row delete: reveal on hover for MOUSE users only -----
+   Touch (phone + tablet) has no hover, so the control must stay
+   visible there or it becomes unreachable. The opacity is owned
+   entirely here (the opacity utilities were removed from the
+   markup) so there's no cascade tie with Tailwind. */
+.task-delete-btn { opacity: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .task-delete-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease-out;
+  }
+  .details-task-row:hover .task-delete-btn,
+  .task-delete-btn:focus-visible {
+    opacity: 1;
+  }
+}
+
+/* --- Phone: collapse secondary header chrome ------------------- */
+@media (max-width: 639px) {
+  #header-username,
+  #sync-status,
+  #sync-label {
+    display: none !important;                   /* JS toggles classes, so force it */
+  }
+}
+
+/* --- Bottom-sheet modal on phones ----------------------------- */
+@media (max-width: 639px) {
+  .modal-sheet .modal-panel {
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    max-height: 92vh;
+    overflow-y: auto;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+    animation: sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+/* Tablet / desktop: a gentle rise-and-fade instead of a slide. */
+@media (min-width: 640px) {
+  .modal-sheet .modal-panel,
+  #dialog-delete-confirm .dialog-panel {
+    animation: panel-in 0.18s ease-out;
+  }
+}
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* --- Reduced motion: honour the OS preference everywhere ------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -621,7 +621,10 @@ function enqueuePendingOp(op) {
     var entityId = op.payload && op.payload.id;
     for (var i = 0; i < pendingOps.length; i++) {
       if (pendingOps[i].action === op.action && pendingOps[i].payload && pendingOps[i].payload.id === entityId) {
-        pendingOps[i] = op; // replace with latest value
+        // Merge fields (not wholesale replace) so editing different fields of
+        // the same entity — e.g. rename then tick complete — both survive.
+        // Same field twice still collapses to the latest value.
+        pendingOps[i].payload = Object.assign({}, pendingOps[i].payload, op.payload);
         updateSyncUI();
         return;
       }
@@ -802,6 +805,7 @@ function updateSyncUI() {
 function openAddProjectModal() {
   setModalMode("add");
   showModal("modal-project-form");
+  focusProjectTitle();
 }
 
 function openEditProjectModal(projectId) {
@@ -809,6 +813,15 @@ function openEditProjectModal(projectId) {
   if (!project) return;
   setModalMode("edit", project);
   showModal("modal-project-form");
+  focusProjectTitle();
+}
+
+function focusProjectTitle() {
+  // rAF so focus lands after the panel is laid out / animating in.
+  requestAnimationFrame(function () {
+    var t = document.getElementById("form-project-title");
+    if (t) t.focus();
+  });
 }
 
 function setModalMode(mode, project) {
@@ -828,7 +841,7 @@ function setModalMode(mode, project) {
   if (titleErrEl) { titleErrEl.classList.add("hidden"); titleErrEl.textContent = ""; }
 
   if (mode === "add") {
-    if (titleEl)    titleEl.textContent    = "Add New Progression";
+    if (titleEl)    titleEl.textContent    = "Add New Project";
     if (subtitleEl) subtitleEl.textContent = "Create a new KPI project to track";
     if (labelEl)    labelEl.textContent    = "Add Project";
     if (idField)    idField.value          = "";
@@ -837,7 +850,7 @@ function setModalMode(mode, project) {
     if (statusSel)  statusSel.value        = "not-started";
     if (prioritySel)prioritySel.value      = "medium";
   } else {
-    if (titleEl)    titleEl.textContent    = "Edit Progression";
+    if (titleEl)    titleEl.textContent    = "Edit Project";
     if (subtitleEl) subtitleEl.textContent = "Update project details";
     if (labelEl)    labelEl.textContent    = "Save Changes";
     if (idField)    idField.value          = project.id;
@@ -870,15 +883,54 @@ function openDeleteDialog(projectId) {
   var project = state.projects.find(function (p) { return p.id === projectId; });
   if (!project) return;
 
-  var nameEl  = document.getElementById("dialog-delete-project-name");
-  var idField = document.getElementById("dialog-delete-project-id");
+  setDeleteDialog({
+    type      : "project",
+    title     : "Delete Project",
+    name      : project.title,
+    extra     : " This will also delete all associated tasks.",
+    projectId : projectId,
+    taskId    : ""
+  });
+  showModal("dialog-delete-confirm");
+}
+
+function openDeleteTaskDialog(taskId, projectId) {
+  var project = state.projects.find(function (p) { return p.id === projectId; });
+  var task    = project && (project.tasks || []).find(function (t) { return t.id === taskId; });
+  if (!task) return;
+
+  setDeleteDialog({
+    type      : "task",
+    title     : "Delete Task",
+    name      : task.title,
+    extra     : "",
+    projectId : projectId,
+    taskId    : taskId
+  });
+  showModal("dialog-delete-confirm");
+}
+
+/**
+ * setDeleteDialog(opts)
+ * Populates the shared delete-confirm dialog for either a project or a task.
+ * opts = { type, title, name, extra, projectId, taskId }
+ */
+function setDeleteDialog(opts) {
+  var titleEl = document.getElementById("dialog-delete-title");
+  var nameEl  = document.getElementById("dialog-delete-name");
+  var extraEl = document.getElementById("dialog-delete-extra");
+  var typeEl  = document.getElementById("dialog-delete-type");
+  var pidEl   = document.getElementById("dialog-delete-project-id");
+  var tidEl   = document.getElementById("dialog-delete-task-id");
   var errEl   = document.getElementById("dialog-delete-error");
 
-  if (nameEl)  nameEl.textContent = project.title; // safe — textContent
-  if (idField) idField.value      = projectId;
+  if (titleEl) titleEl.textContent = opts.title;
+  if (nameEl)  nameEl.textContent  = opts.name;        // safe — textContent
+  if (extraEl) extraEl.textContent = opts.extra || "";
+  if (typeEl)  typeEl.value        = opts.type;
+  if (pidEl)   pidEl.value         = opts.projectId || "";
+  if (tidEl)   tidEl.value         = opts.taskId || "";
   if (errEl)   { errEl.classList.add("hidden"); errEl.textContent = ""; }
-
-  showModal("dialog-delete-confirm");
 }
 
 /* =========================================================================
@@ -1057,12 +1109,21 @@ function handleDelegatedClick(e) {
   }
 
   // -------------------------------------------------------------------
+  // Edit (rename) task — tap the title cell to turn it into an input
+  // -------------------------------------------------------------------
+  var editTaskCell = target.closest("[data-action='edit-task']");
+  if (editTaskCell) {
+    startEditTask(editTaskCell);
+    return;
+  }
+
+  // -------------------------------------------------------------------
   // Delete task
   // -------------------------------------------------------------------
   var delTaskBtn = target.closest("[data-action='delete-task']");
   if (delTaskBtn) {
     e.stopPropagation();
-    handleDeleteTask(delTaskBtn.dataset.taskId, delTaskBtn.dataset.projectId);
+    openDeleteTaskDialog(delTaskBtn.dataset.taskId, delTaskBtn.dataset.projectId);
     return;
   }
 
@@ -1089,6 +1150,44 @@ document.addEventListener("change", function (e) {
   var cb = e.target.closest(".task-completed-checkbox");
   if (!cb) return;
   handleToggleTask(cb.dataset.taskId, cb.dataset.projectId, cb.checked);
+});
+
+/* =========================================================================
+   INLINE TASK RENAME — Enter commits, Escape reverts, blur commits
+   ========================================================================= */
+document.addEventListener("keydown", function (e) {
+  var input = e.target.closest && e.target.closest(".task-title-input");
+  if (!input) return;
+  if (e.key === "Enter") {
+    e.preventDefault();
+    input.blur();                 // commit through the focusout handler
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    input._cancelled = true;      // tell focusout to revert, not save
+    input.blur();
+  }
+});
+
+document.addEventListener("focusout", function (e) {
+  var input = e.target.closest && e.target.closest(".task-title-input");
+  if (!input) return;
+  if (input._cancelled) {
+    input._cancelled = false;
+    cancelEditTask(input);
+  } else {
+    saveEditTask(input);
+  }
+});
+
+/* =========================================================================
+   KEYBOARD — Escape closes an open modal / dialog
+   ========================================================================= */
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  var dialog = document.getElementById("dialog-delete-confirm");
+  if (dialog && !dialog.classList.contains("hidden")) { hideModal("dialog-delete-confirm"); return; }
+  var modal = document.getElementById("modal-project-form");
+  if (modal && !modal.classList.contains("hidden")) { hideModal("modal-project-form"); return; }
 });
 
 /* =========================================================================
@@ -1147,20 +1246,28 @@ async function handleProjectFormSubmit(e) {
 }
 
 async function handleConfirmDelete() {
-  var idField = document.getElementById("dialog-delete-project-id");
-  var errEl   = document.getElementById("dialog-delete-error");
-  var spinner = document.getElementById("dialog-delete-spinner");
+  var typeEl     = document.getElementById("dialog-delete-type");
+  var pidEl      = document.getElementById("dialog-delete-project-id");
+  var tidEl      = document.getElementById("dialog-delete-task-id");
+  var errEl      = document.getElementById("dialog-delete-error");
+  var spinner    = document.getElementById("dialog-delete-spinner");
   var confirmBtn = document.getElementById("dialog-delete-confirm-btn");
 
-  var projectId = idField ? idField.value : "";
-  if (!projectId) return;
+  var type      = typeEl ? typeEl.value : "project";
+  var projectId = pidEl ? pidEl.value : "";
+  var taskId    = tidEl ? tidEl.value : "";
+  if (type === "task" ? !taskId : !projectId) return;
 
   if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
   if (spinner)    spinner.classList.remove("hidden");
   if (confirmBtn) confirmBtn.disabled = true;
 
   try {
-    await deleteProject(projectId);
+    if (type === "task") {
+      await deleteTask(taskId, projectId);
+    } else {
+      await deleteProject(projectId);
+    }
     hideModal("dialog-delete-confirm");
   } catch (err) {
     if (errEl) { errEl.textContent = err.message || "Delete failed."; errEl.classList.remove("hidden"); }
@@ -1168,6 +1275,41 @@ async function handleConfirmDelete() {
     if (spinner)    spinner.classList.add("hidden");
     if (confirmBtn) confirmBtn.disabled = false;
   }
+}
+
+/* ----- Inline task rename -------------------------------------------- */
+
+function startEditTask(cellEl) {
+  var span  = cellEl.querySelector(".task-title");
+  var input = cellEl.querySelector(".task-title-input");
+  if (!span || !input) return;
+  if (!input.classList.contains("hidden")) return; // already editing this row
+  input.value = span.textContent;
+  span.classList.add("hidden");
+  input.classList.remove("hidden");
+  input.focus();
+  input.select();
+}
+
+function saveEditTask(input) {
+  var cell = input.closest("[data-action='edit-task']");
+  var span = cell ? cell.querySelector(".task-title") : null;
+  var original = span ? span.textContent : "";
+  var newTitle = input.value.trim();
+
+  // Leave edit mode visually (a successful save re-renders over this anyway).
+  input.classList.add("hidden");
+  if (span) span.classList.remove("hidden");
+
+  if (!newTitle || newTitle === original) return; // empty or unchanged → keep
+  updateTask(input.dataset.taskId, input.dataset.projectId, { title: newTitle });
+}
+
+function cancelEditTask(input) {
+  var cell = input.closest("[data-action='edit-task']");
+  var span = cell ? cell.querySelector(".task-title") : null;
+  input.classList.add("hidden");
+  if (span) span.classList.remove("hidden");
 }
 
 async function handleConfirmAddTask(projectId) {
@@ -1194,14 +1336,6 @@ async function handleToggleTask(taskId, projectId, completed) {
   } catch (err) {
     showGlobalError(err.message || "Failed to update task");
     render(); // revert checkbox visually
-  }
-}
-
-async function handleDeleteTask(taskId, projectId) {
-  try {
-    await deleteTask(taskId, projectId);
-  } catch (err) {
-    showGlobalError(err.message || "Failed to delete task");
   }
 }
 
