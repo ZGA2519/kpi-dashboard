@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KPI Dashboard — Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body class="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+
+  <div class="w-full max-w-sm">
+
+    <!-- Logo / Brand -->
+    <div class="mb-8 flex flex-col items-center gap-2 text-center">
+      <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+      </div>
+      <h1 class="text-xl font-semibold text-slate-900">KPI Dashboard</h1>
+      <p class="text-sm text-slate-500">Sign in to your account</p>
+    </div>
+
+    <!-- Login card -->
+    <div class="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+
+      <!-- Error banner -->
+      <div id="login-error-banner"
+           class="hidden mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+           role="alert">
+        <p id="login-error-text" class="text-sm text-red-700"></p>
+      </div>
+
+      <!-- Login form -->
+      <form id="form-login" novalidate class="space-y-5">
+
+        <!-- Username -->
+        <div class="space-y-1.5">
+          <label for="login-username" class="block text-sm font-medium text-slate-700">
+            Username
+          </label>
+          <input type="text"
+                 id="login-username"
+                 name="username"
+                 autocomplete="username"
+                 required
+                 placeholder="Enter your username"
+                 class="w-full rounded-md border border-slate-300 px-3 py-2.5 text-sm
+                        placeholder:text-slate-400
+                        focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500
+                        disabled:cursor-not-allowed disabled:opacity-50" />
+          <p id="login-username-error" class="hidden text-xs text-red-600"></p>
+        </div>
+
+        <!-- Password -->
+        <div class="space-y-1.5">
+          <label for="login-password" class="block text-sm font-medium text-slate-700">
+            Password
+          </label>
+          <div class="relative">
+            <input type="password"
+                   id="login-password"
+                   name="password"
+                   autocomplete="current-password"
+                   required
+                   placeholder="Enter your password"
+                   class="w-full rounded-md border border-slate-300 px-3 py-2.5 pr-10 text-sm
+                          placeholder:text-slate-400
+                          focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500
+                          disabled:cursor-not-allowed disabled:opacity-50" />
+            <!-- Toggle password visibility — handled by A4 -->
+            <button type="button"
+                    id="login-toggle-password"
+                    data-action="toggle-password-visibility"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400
+                           hover:text-slate-600 focus:outline-none"
+                    aria-label="Toggle password visibility">
+              <!-- Eye icon (shown when password is hidden) -->
+              <svg id="icon-eye" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <!-- Eye-off icon (shown when password is visible) -->
+              <svg id="icon-eye-off" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 hidden" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </button>
+          </div>
+          <p id="login-password-error" class="hidden text-xs text-red-600"></p>
+        </div>
+
+        <!-- Submit button -->
+        <button type="submit"
+                id="login-submit-btn"
+                class="flex w-full items-center justify-center gap-2 rounded-md bg-slate-900
+                       px-4 py-2.5 text-sm font-medium text-white
+                       hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500
+                       disabled:cursor-not-allowed disabled:opacity-60
+                       transition-colors">
+          <!-- Spinner — shown while submitting -->
+          <span id="login-spinner"
+                class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+          <span id="login-submit-label">Sign in</span>
+        </button>
+
+      </form>
+    </div>
+
+    <!-- Footer note -->
+    <p class="mt-6 text-center text-xs text-slate-400">
+      KPI Dashboard
+    </p>
+  </div>
+
+  <!-- A4 JS dependencies (must load before app.js) -->
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <!-- A4 JS entry point -->
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

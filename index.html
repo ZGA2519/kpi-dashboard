@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KPI Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: '#ffffff',
+            foreground: '#0f172a',
+            muted: '#f1f5f9',
+            'muted-foreground': '#64748b',
+            border: '#e2e8f0',
+            destructive: '#ef4444',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+
+  <!-- =========================================================
+       MOCK FIXTURE — replaced at runtime by A4 via CONFIG.WEB_APP_URL
+       ========================================================= -->
+  <script id="mock-data" type="application/json">
+  {
+    "stats": {
+      "total": 4,
+      "completed": 1,
+      "inProgress": 2,
+      "avgProgress": 52
+    },
+    "projects": [
+      {
+        "id": "mock-1",
+        "title": "Q3 Sales Target",
+        "description": "Achieve regional sales quota for Q3 across all product lines.",
+        "status": "in-progress",
+        "priority": "high",
+        "progress": 72,
+        "createdAt": "2025-04-01T00:00:00.000Z",
+        "updatedAt": "2025-06-01T00:00:00.000Z",
+        "tasks": [
+          { "id": "t1", "projectId": "mock-1", "title": "Define sales KPIs", "completed": true,  "createdAt": "2025-04-02T00:00:00.000Z", "updatedAt": "2025-04-10T00:00:00.000Z" },
+          { "id": "t2", "projectId": "mock-1", "title": "Train sales team",  "completed": true,  "createdAt": "2025-04-05T00:00:00.000Z", "updatedAt": "2025-05-01T00:00:00.000Z" },
+          { "id": "t3", "projectId": "mock-1", "title": "Mid-quarter review", "completed": false, "createdAt": "2025-05-10T00:00:00.000Z", "updatedAt": "2025-05-10T00:00:00.000Z" }
+        ]
+      },
+      {
+        "id": "mock-2",
+        "title": "Product Launch 2025",
+        "description": "Launch the new product line by end of Q2.",
+        "status": "completed",
+        "priority": "high",
+        "progress": 100,
+        "createdAt": "2025-01-15T00:00:00.000Z",
+        "updatedAt": "2025-05-30T00:00:00.000Z",
+        "tasks": [
+          { "id": "t4", "projectId": "mock-2", "title": "Market research",    "completed": true, "createdAt": "2025-01-16T00:00:00.000Z", "updatedAt": "2025-02-01T00:00:00.000Z" },
+          { "id": "t5", "projectId": "mock-2", "title": "Product build",       "completed": true, "createdAt": "2025-02-01T00:00:00.000Z", "updatedAt": "2025-04-30T00:00:00.000Z" }
+        ]
+      },
+      {
+        "id": "mock-3",
+        "title": "Customer Satisfaction",
+        "description": "Improve NPS score from 42 to 55 by year end.",
+        "status": "in-progress",
+        "priority": "medium",
+        "progress": 40,
+        "createdAt": "2025-03-10T00:00:00.000Z",
+        "updatedAt": "2025-06-05T00:00:00.000Z",
+        "tasks": [
+          { "id": "t6", "projectId": "mock-3", "title": "Customer survey Q1", "completed": true,  "createdAt": "2025-03-11T00:00:00.000Z", "updatedAt": "2025-04-01T00:00:00.000Z" },
+          { "id": "t7", "projectId": "mock-3", "title": "Support team coaching", "completed": false, "createdAt": "2025-04-01T00:00:00.000Z", "updatedAt": "2025-04-01T00:00:00.000Z" },
+          { "id": "t8", "projectId": "mock-3", "title": "Customer survey Q2", "completed": false, "createdAt": "2025-06-01T00:00:00.000Z", "updatedAt": "2025-06-01T00:00:00.000Z" },
+          { "id": "t9", "projectId": "mock-3", "title": "Process improvements", "completed": false, "createdAt": "2025-06-01T00:00:00.000Z", "updatedAt": "2025-06-01T00:00:00.000Z" }
+        ]
+      },
+      {
+        "id": "mock-4",
+        "title": "Internal Audit Prep",
+        "description": "Prepare all documentation for the annual internal audit.",
+        "status": "not-started",
+        "priority": "low",
+        "progress": 0,
+        "createdAt": "2025-06-10T00:00:00.000Z",
+        "updatedAt": "2025-06-10T00:00:00.000Z",
+        "tasks": []
+      }
+    ]
+  }
+  </script>
+  <!-- END MOCK FIXTURE -->
+
+  <!-- =========================================================
+       LOADING OVERLAY — shown while A4 fetches real data
+       ========================================================= -->
+  <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-white">
+    <div class="text-center">
+      <div class="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-700"></div>
+      <p id="loading-message" class="mt-3 text-sm text-slate-500">Loading dashboard…</p>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       AUTH GUARD — shown when session is invalid (A4 manages)
+       ========================================================= -->
+  <div id="auth-guard" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-50">
+    <div class="text-center">
+      <p class="text-slate-600">Session expired. Redirecting to login…</p>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       GLOBAL ERROR BANNER
+       ========================================================= -->
+  <div id="global-error-banner"
+       class="hidden fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-red-50 px-5 py-3 shadow-md border border-red-200"
+       role="alert">
+    <p id="global-error-text" class="text-sm text-red-700"></p>
+  </div>
+
+  <!-- =========================================================
+       MAIN APP WRAPPER
+       ========================================================= -->
+  <div id="app" class="hidden min-h-screen bg-slate-50">
+
+    <!-- HEADER -->
+    <header class="border-b border-slate-200 bg-white">
+      <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
+            <!-- Grid icon (inline SVG — no external dependency) -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-semibold leading-tight">KPI Dashboard</h1>
+            <p class="text-xs text-slate-500">Track and manage your project progressions</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="header-username" class="hidden text-sm text-slate-500"></span>
+          <button id="btn-logout"
+                  class="hidden rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700
+                         hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+            Log out
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 space-y-10">
+
+      <!-- =====================================================
+           SECTION 1 — STAT CARDS
+           ===================================================== -->
+      <section id="section-stat-cards" aria-label="Overall statistics">
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+
+          <!-- Total Projects -->
+          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between">
+              <span class="text-sm text-slate-500">Total Projects</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </div>
+            <div class="mt-2">
+              <span id="stat-total" class="text-2xl font-semibold">—</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Active and completed</p>
+          </div>
+
+          <!-- Completed -->
+          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between">
+              <span class="text-sm text-slate-500">Completed</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-500" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+            </div>
+            <div class="mt-2">
+              <span id="stat-completed" class="text-2xl font-semibold">—</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Successfully finished</p>
+          </div>
+
+          <!-- In Progress -->
+          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between">
+              <span class="text-sm text-slate-500">In Progress</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div class="mt-2">
+              <span id="stat-in-progress" class="text-2xl font-semibold">—</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Currently active</p>
+          </div>
+
+          <!-- Avg Progress -->
+          <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between">
+              <span class="text-sm text-slate-500">Avg. Progress</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-500" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                <polyline points="17 6 23 6 23 12"/>
+              </svg>
+            </div>
+            <div class="mt-2">
+              <span id="stat-avg-progress" class="text-2xl font-semibold">—</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">Across all projects</p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- =====================================================
+           SECTION 2 — PROJECT CARDS
+           ===================================================== -->
+      <section id="section-project-cards" aria-label="All Progressions">
+        <h2 class="text-lg font-semibold mb-4">All Progressions</h2>
+
+        <!-- Filters toolbar -->
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <!-- Search -->
+          <div class="relative max-w-sm flex-1">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input id="filter-search"
+                   type="text"
+                   placeholder="Search progressions…"
+                   class="w-full rounded-md border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm
+                          placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" />
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Status filter -->
+            <select id="filter-status"
+                    class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+              <option value="all">All Status</option>
+              <option value="not-started">Not Started</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="on-hold">On Hold</option>
+            </select>
+
+            <!-- Priority filter -->
+            <select id="filter-priority"
+                    class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+              <option value="all">All Priority</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+
+            <!-- Add New button -->
+            <button id="btn-add-project"
+                    class="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium
+                           text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Add New
+            </button>
+          </div>
+        </div>
+
+        <!-- Cards grid — A4 populates this with cloned #tpl-project-card nodes -->
+        <div id="project-cards-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <!-- Populated by A4 -->
+        </div>
+
+        <!-- Empty state -->
+        <div id="project-cards-empty" class="hidden py-12 text-center">
+          <p class="text-slate-500">No projects found</p>
+        </div>
+      </section>
+
+      <!-- =====================================================
+           SECTION 3 — DETAILS TABLE
+           ===================================================== -->
+      <section id="section-details" aria-label="Details">
+        <h2 class="text-lg font-semibold mb-4">Details</h2>
+
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <!-- Table toolbar -->
+          <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <span class="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+              All Goals
+            </span>
+            <button id="btn-details-new-project"
+                    class="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium
+                           text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              New
+            </button>
+          </div>
+
+          <!-- Table header -->
+          <div class="grid grid-cols-12 gap-2 border-b border-slate-200 bg-slate-50/60 px-4 py-2 text-xs font-medium text-slate-500">
+            <div class="col-span-5">Goal</div>
+            <div class="col-span-2">Category</div>
+            <div class="col-span-2">Completed</div>
+            <div class="col-span-3">Progress</div>
+          </div>
+
+          <!-- Table body — A4 populates this -->
+          <div id="details-table-body" class="divide-y divide-slate-100">
+            <!-- Populated by A4 -->
+          </div>
+
+          <!-- Empty state -->
+          <div id="details-table-empty" class="hidden px-4 py-12 text-center">
+            <p class="text-slate-500">No projects yet</p>
+          </div>
+        </div>
+      </section>
+
+    </main><!-- /main -->
+  </div><!-- /#app -->
+
+  <!-- =========================================================
+       TEMPLATES — cloned by A4, never rendered directly
+       ========================================================= -->
+
+  <!-- Project Card template -->
+  <template id="tpl-project-card">
+    <div class="project-card relative cursor-pointer rounded-xl border border-slate-200 bg-white p-5 shadow-sm
+                transition-shadow hover:shadow-md"
+         data-project-id="">
+      <!-- Delete button -->
+      <button class="project-card-delete-btn absolute right-2 top-2 flex h-8 w-8 items-center justify-center
+                     rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 focus:outline-none"
+              data-action="delete-project" data-project-id="" aria-label="Delete project">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 pointer-events-none" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/>
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+
+      <!-- Title -->
+      <h3 class="project-card-title pr-8 font-medium text-slate-900 truncate"></h3>
+
+      <!-- Badges row -->
+      <div class="mt-2 flex flex-wrap gap-1.5">
+        <span class="project-card-status-badge rounded-full px-2 py-0.5 text-xs font-medium"></span>
+        <span class="project-card-priority-badge rounded-full px-2 py-0.5 text-xs font-medium"></span>
+      </div>
+
+      <!-- Description -->
+      <p class="project-card-description mt-3 line-clamp-2 text-sm text-slate-500"></p>
+
+      <!-- Progress bar -->
+      <div class="mt-4">
+        <div class="flex items-center justify-between text-sm mb-1.5">
+          <span class="text-slate-500 text-xs">Progress</span>
+          <span class="project-card-progress-pct font-medium text-xs"></span>
+        </div>
+        <div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+          <div class="project-card-progress-bar h-full bg-slate-900 transition-all" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Dates -->
+      <div class="mt-4 flex items-center justify-between text-xs text-slate-400">
+        <span>Created: <span class="project-card-created-at"></span></span>
+        <span>Updated: <span class="project-card-updated-at"></span></span>
+      </div>
+    </div>
+  </template>
+
+  <!-- Details table — project row template -->
+  <template id="tpl-details-project-row">
+    <div class="details-project-row" data-project-id="">
+      <!-- Project header row -->
+      <div class="grid grid-cols-12 gap-2 px-4 py-2.5 hover:bg-slate-50 cursor-pointer"
+           data-action="toggle-project-row" data-project-id="">
+        <div class="col-span-5 flex items-center gap-2">
+          <!-- Chevron toggle -->
+          <button class="details-chevron flex h-5 w-5 items-center justify-center rounded hover:bg-slate-200
+                         focus:outline-none transition-transform" data-action="toggle-project-row" data-project-id=""
+                  aria-label="Expand/collapse tasks">
+            <!-- down chevron (default expanded) -->
+            <svg class="chevron-down h-4 w-4 text-slate-400 transition-transform" xmlns="http://www.w3.org/2000/svg"
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <!-- Folder icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="details-project-title text-sm font-medium text-slate-900 truncate"></span>
+        </div>
+        <div class="col-span-2 flex items-center">
+          <span class="text-sm text-slate-400">—</span>
+        </div>
+        <div class="col-span-2 flex items-center">
+          <!-- Disabled checkbox — reflects completed status -->
+          <input type="checkbox" class="details-project-completed-check h-4 w-4 rounded border-slate-300
+                                        accent-emerald-500 cursor-default" disabled />
+        </div>
+        <div class="col-span-3 flex items-center gap-2">
+          <span class="details-project-progress-pct text-sm font-medium text-emerald-600"></span>
+          <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200">
+            <div class="details-project-progress-bar h-full bg-emerald-500 transition-all" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task rows container -->
+      <div class="details-task-rows bg-slate-50/50">
+        <!-- Populated by A4 with tpl-details-task-row clones -->
+
+        <!-- Add-task trigger row (always last inside details-task-rows) -->
+        <div class="details-add-task-trigger">
+          <button class="details-add-task-btn flex w-full items-center gap-2 px-4 py-2 pl-11 text-sm
+                         text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none"
+                  data-action="show-add-task-input" data-project-id="">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New sub-item
+          </button>
+          <!-- Inline add-task form (hidden by default) -->
+          <div class="details-add-task-form hidden grid grid-cols-12 gap-2 px-4 py-2">
+            <div class="col-span-7 flex items-center gap-2 pl-7">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <input type="text"
+                     class="details-new-task-input h-7 flex-1 rounded border border-slate-300 px-2 text-sm
+                            focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                     placeholder="Task name…"
+                     data-action="new-task-input"
+                     data-project-id="" />
+            </div>
+            <div class="col-span-5 flex items-center gap-1">
+              <button class="details-add-task-confirm-btn rounded bg-slate-900 px-2.5 py-1 text-xs font-medium
+                             text-white hover:bg-slate-700 focus:outline-none"
+                      data-action="confirm-add-task" data-project-id="">Add</button>
+              <button class="details-add-task-cancel-btn rounded border border-slate-300 px-2.5 py-1 text-xs
+                             font-medium text-slate-700 hover:bg-slate-100 focus:outline-none"
+                      data-action="cancel-add-task" data-project-id="">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- Details table — task row template -->
+  <template id="tpl-details-task-row">
+    <div class="details-task-row group grid grid-cols-12 gap-2 px-4 py-2 hover:bg-slate-100/60"
+         data-task-id="">
+      <div class="col-span-5 flex items-center gap-2 pl-7">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 shrink-0" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <span class="task-title text-sm"></span>
+      </div>
+      <div class="col-span-2 flex items-center">
+        <span class="text-sm text-slate-400">—</span>
+      </div>
+      <div class="col-span-2 flex items-center">
+        <input type="checkbox"
+               class="task-completed-checkbox h-4 w-4 rounded border-slate-300 accent-blue-500 cursor-pointer"
+               data-action="toggle-task" data-task-id="" data-project-id="" />
+      </div>
+      <div class="col-span-3 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="task-progress-pct text-sm text-slate-500"></span>
+          <div class="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
+            <div class="task-progress-bar h-full bg-slate-400 transition-all" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="task-delete-btn flex h-6 w-6 items-center justify-center rounded text-slate-300
+                       opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500
+                       focus:outline-none transition-opacity"
+                data-action="delete-task" data-task-id="" data-project-id="" aria-label="Delete task">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 pointer-events-none" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </template>
+
+  <!-- =========================================================
+       MODAL — Add / Edit Project
+       ========================================================= -->
+  <div id="modal-project-form"
+       class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm"
+       role="dialog" aria-modal="true" aria-labelledby="modal-form-title">
+    <!-- Backdrop click closes modal — handled by A4 -->
+    <div class="modal-backdrop absolute inset-0"></div>
+
+    <div class="modal-panel relative w-full max-w-lg rounded-xl bg-white shadow-xl mx-4">
+      <!-- Modal header -->
+      <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+        <div>
+          <h2 id="modal-form-title" class="text-base font-semibold text-slate-900"></h2>
+          <p id="modal-form-subtitle" class="mt-0.5 text-sm text-slate-500"></p>
+        </div>
+        <button id="modal-form-close-btn"
+                class="flex h-8 w-8 items-center justify-center rounded-md text-slate-400
+                       hover:bg-slate-100 hover:text-slate-700 focus:outline-none"
+                data-action="close-modal-form" aria-label="Close">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal body / form -->
+      <form id="form-project" novalidate class="px-6 py-5 space-y-4">
+        <!-- Hidden field for project id (edit mode) -->
+        <input type="hidden" id="form-project-id" name="id" value="" />
+
+        <!-- Title -->
+        <div class="space-y-1.5">
+          <label for="form-project-title" class="block text-sm font-medium text-slate-700">Title</label>
+          <input type="text" id="form-project-title" name="title" required
+                 placeholder="Enter project title"
+                 class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+                        placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" />
+          <p id="form-title-error" class="hidden text-xs text-red-600"></p>
+        </div>
+
+        <!-- Description -->
+        <div class="space-y-1.5">
+          <label for="form-project-description" class="block text-sm font-medium text-slate-700">Description</label>
+          <textarea id="form-project-description" name="description" rows="3"
+                    placeholder="Describe the project…"
+                    class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+                           placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 resize-none"></textarea>
+        </div>
+
+        <!-- Status + Priority row -->
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-1.5">
+            <label for="form-project-status" class="block text-sm font-medium text-slate-700">Status</label>
+            <select id="form-project-status" name="status"
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+              <option value="not-started">Not Started</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="on-hold">On Hold</option>
+            </select>
+          </div>
+          <div class="space-y-1.5">
+            <label for="form-project-priority" class="block text-sm font-medium text-slate-700">Priority</label>
+            <select id="form-project-priority" name="priority"
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm
+                           focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Form error slot -->
+        <p id="form-project-error" class="hidden rounded bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200"></p>
+
+        <!-- Footer actions -->
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" id="modal-form-cancel-btn"
+                  data-action="close-modal-form"
+                  class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium
+                         text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+            Cancel
+          </button>
+          <button type="submit" id="modal-form-submit-btn"
+                  class="flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium
+                         text-white hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:opacity-60">
+            <span id="modal-form-submit-spinner"
+                  class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+            <span id="modal-form-submit-label">Add Project</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       DIALOG — Delete Confirm
+       ========================================================= -->
+  <div id="dialog-delete-confirm"
+       class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm"
+       role="alertdialog" aria-modal="true" aria-labelledby="dialog-delete-title">
+    <div class="dialog-backdrop absolute inset-0"></div>
+
+    <div class="dialog-panel relative w-full max-w-md rounded-xl bg-white shadow-xl mx-4 p-6">
+      <h2 id="dialog-delete-title" class="text-base font-semibold text-slate-900">Delete Project</h2>
+      <p class="mt-2 text-sm text-slate-600">
+        Are you sure you want to delete
+        <span id="dialog-delete-project-name" class="font-medium text-slate-900"></span>?
+        This will also delete all associated tasks. This action cannot be undone.
+      </p>
+
+      <!-- Error slot -->
+      <p id="dialog-delete-error" class="hidden mt-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700 border border-red-200"></p>
+
+      <!-- Hidden field for project id -->
+      <input type="hidden" id="dialog-delete-project-id" value="" />
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button id="dialog-delete-cancel-btn"
+                data-action="close-dialog-delete"
+                class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium
+                       text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
+          Cancel
+        </button>
+        <button id="dialog-delete-confirm-btn"
+                data-action="confirm-delete"
+                class="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium
+                       text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-60">
+          <span id="dialog-delete-spinner"
+                class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- A4 JS dependencies (must load before app.js) -->
+  <script src="assets/js/api.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <!-- A4 JS entry point -->
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

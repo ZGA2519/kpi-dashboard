@@ -1,0 +1,87 @@
+/*
+ * styles.css — Custom overrides beyond Tailwind utilities.
+ * KPI Dashboard static shell (agent A3).
+ * All structural/layout work is done via Tailwind CDN classes in the HTML.
+ * Only add here what Tailwind cannot handle via utilities alone.
+ */
+
+/* ---------------------------------------------------------------
+   Status badge colour tokens
+   (used by A4 when injecting project-card-status-badge classes)
+   --------------------------------------------------------------- */
+.badge-status-not-started  { background-color: #f1f5f9; color: #475569; }
+.badge-status-in-progress  { background-color: #d1fae5; color: #065f46; }
+.badge-status-completed    { background-color: #bbf7d0; color: #14532d; }
+.badge-status-on-hold      { background-color: #fef3c7; color: #92400e; }
+
+/* Priority badge colour tokens */
+.badge-priority-low        { background-color: #f1f5f9; color: #475569; }
+.badge-priority-medium     { background-color: #ffedd5; color: #9a3412; }
+.badge-priority-high       { background-color: #fee2e2; color: #991b1b; }
+
+/* ---------------------------------------------------------------
+   Modal / dialog open state
+   A4 toggles these by replacing 'hidden' with 'flex' on the overlay.
+   The .modal-open helper lets JS do: el.classList.add('modal-open')
+   --------------------------------------------------------------- */
+.modal-open { display: flex !important; }
+
+/* ---------------------------------------------------------------
+   Details table — collapsed project row hides task sub-rows.
+   A4 toggles .row-collapsed on .details-project-row.
+   --------------------------------------------------------------- */
+.details-project-row.row-collapsed .details-task-rows {
+  display: none;
+}
+
+/* Rotate chevron when collapsed */
+.details-project-row.row-collapsed .chevron-down {
+  transform: rotate(-90deg);
+}
+
+/* ---------------------------------------------------------------
+   Completed task text strike-through
+   A4 toggles .task-done on the .details-task-row element.
+   --------------------------------------------------------------- */
+.details-task-row.task-done .task-title {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+/* ---------------------------------------------------------------
+   Spinner animation (supplement Tailwind's animate-spin which
+   requires JIT; with CDN it is usually available, but kept here
+   as a fallback).
+   --------------------------------------------------------------- */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.kpi-spin {
+  animation: spin 0.75s linear infinite;
+}
+
+/* ---------------------------------------------------------------
+   Ensure backdrop-blur works in older WebKit via -webkit- prefix.
+   --------------------------------------------------------------- */
+.backdrop-blur-sm {
+  -webkit-backdrop-filter: blur(4px);
+          backdrop-filter: blur(4px);
+}
+
+/* ---------------------------------------------------------------
+   Line-clamp polyfill for WebKit (Tailwind CDN handles modern).
+   --------------------------------------------------------------- */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------
+   Scrollbar styling (webkit) — keeps long cards/tables tidy.
+   --------------------------------------------------------------- */
+::-webkit-scrollbar            { width: 6px; height: 6px; }
+::-webkit-scrollbar-track      { background: #f1f5f9; }
+::-webkit-scrollbar-thumb      { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover{ background: #94a3b8; }

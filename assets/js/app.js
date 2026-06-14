@@ -1,0 +1,970 @@
+/**
+ * app.js — Dashboard application entry point
+ *
+ * Loads api.js + auth.js before this file on index.html.
+ * On login.html only auth.js (and api.js) are needed — this file is also
+ * included there but exits immediately when #app is absent.
+ *
+ * Architecture
+ * ------------
+ * - state        : single source of truth ({ projects, stats, isLoading, error })
+ * - render()     : full declarative re-render from state (no partial patching)
+ * - CRUD helpers : call API action → refetch getDashboard → render()
+ * - Event wiring : delegated listeners on document + specific element bindings
+ */
+
+"use strict";
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+var state = {
+  projects  : [],
+  stats     : { total: 0, completed: 0, inProgress: 0, avgProgress: 0 },
+  isLoading : true,
+  error     : null,
+  // UI state
+  filterSearch   : "",
+  filterStatus   : "all",
+  filterPriority : "all",
+  collapsedRows  : {},   // { [projectId]: true }  — details rows collapsed
+  useMock        : false // true when WEB_APP_URL is not configured
+};
+
+/* =========================================================================
+   GUARD — exit on login page (auth.js handles that page's logic)
+   ========================================================================= */
+(function () {
+  if (!document.getElementById("app")) return; // not the dashboard page
+  init();
+})();
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+async function init() {
+  // Auth guard — redirect to login if no valid token
+  requireAuth();
+
+  // Load scripts that should have been included before app.js
+  // (api.js / auth.js are separate <script> tags)
+
+  // Wire static UI elements that don't change on re-render
+  wireStaticUI();
+
+  // Show header username
+  var user = getStoredUser();
+  var headerUsername = document.getElementById("header-username");
+  var btnLogout      = document.getElementById("btn-logout");
+  if (user && headerUsername) {
+    headerUsername.textContent = user.username;
+    headerUsername.classList.remove("hidden");
+  }
+  if (btnLogout) btnLogout.classList.remove("hidden");
+
+  // Load data
+  await loadDashboard();
+}
+
+/* =========================================================================
+   DATA LOADING
+   ========================================================================= */
+
+/**
+ * loadDashboard()
+ * Fetches getDashboard from the API (or falls back to mock data).
+ * Updates state and calls render().
+ */
+async function loadDashboard() {
+  setLoading(true, "Loading dashboard…");
+
+  try {
+    var data = await call("getDashboard");
+    state.projects  = data.projects || [];
+    state.stats     = data.stats    || { total: 0, completed: 0, inProgress: 0, avgProgress: 0 };
+    state.error     = null;
+    state.useMock   = false;
+  } catch (err) {
+    if (err.message === "WEB_APP_URL not configured") {
+      // Use embedded mock data from the <script id="mock-data"> block
+      loadMockData();
+    } else if (isAuthError(err)) {
+      // Token rejected — go back to login
+      showAuthGuard();
+      return;
+    } else {
+      state.error = err.message || "Failed to load dashboard";
+    }
+  }
+
+  setLoading(false);
+  render();
+}
+
+function loadMockData() {
+  var mockEl = document.getElementById("mock-data");
+  if (mockEl) {
+    try {
+      var mock = JSON.parse(mockEl.textContent);
+      state.projects = mock.projects || [];
+      state.stats    = mock.stats    || { total: 0, completed: 0, inProgress: 0, avgProgress: 0 };
+      state.error    = null;
+      state.useMock  = true;
+    } catch (e) {
+      state.error = "Failed to parse mock data";
+    }
+  }
+}
+
+function isAuthError(err) {
+  var msg = (err.message || "").toLowerCase();
+  return msg.indexOf("unauthorized") !== -1 ||
+         msg.indexOf("invalid token") !== -1 ||
+         msg.indexOf("session") !== -1 ||
+         msg.indexOf("expired") !== -1;
+}
+
+/* =========================================================================
+   LOADING / ERROR UI HELPERS
+   ========================================================================= */
+
+function setLoading(isLoading, msg) {
+  state.isLoading = isLoading;
+  var overlay = document.getElementById("loading-overlay");
+  var loadMsg = document.getElementById("loading-message");
+  if (!overlay) return;
+  overlay.classList.toggle("hidden", !isLoading);
+  if (msg && loadMsg) loadMsg.textContent = msg;
+}
+
+function showAuthGuard() {
+  setLoading(false);
+  var guard = document.getElementById("auth-guard");
+  if (guard) guard.classList.remove("hidden");
+  setTimeout(function () { logout(); }, 1500);
+}
+
+function showGlobalError(msg) {
+  var banner = document.getElementById("global-error-banner");
+  var text   = document.getElementById("global-error-text");
+  if (!banner || !text) return;
+  text.textContent = msg;
+  banner.classList.remove("hidden");
+  clearTimeout(showGlobalError._timer);
+  showGlobalError._timer = setTimeout(function () {
+    banner.classList.add("hidden");
+  }, 5000);
+}
+
+/* =========================================================================
+   RENDER — full declarative re-render
+   ========================================================================= */
+
+function render() {
+  var appEl = document.getElementById("app");
+  if (!appEl) return;
+  appEl.classList.remove("hidden");
+
+  renderStats();
+  renderProjectCards();
+  renderDetailsTable();
+
+  if (state.error) {
+    showGlobalError(state.error);
+  }
+}
+
+/* ----- Stats cards --------------------------------------------------- */
+function renderStats() {
+  var s = state.stats;
+  setTextById("stat-total",        String(s.total));
+  setTextById("stat-completed",    String(s.completed));
+  setTextById("stat-in-progress",  String(s.inProgress));
+  setTextById("stat-avg-progress", String(s.avgProgress) + "%");
+}
+
+/* ----- Project cards grid -------------------------------------------- */
+function renderProjectCards() {
+  var grid     = document.getElementById("project-cards-grid");
+  var emptyEl  = document.getElementById("project-cards-empty");
+  var template = document.getElementById("tpl-project-card");
+  if (!grid || !template) return;
+
+  // Filter
+  var projects = filteredProjects();
+
+  // Clear existing cards
+  while (grid.firstChild) grid.removeChild(grid.firstChild);
+
+  if (projects.length === 0) {
+    if (emptyEl) emptyEl.classList.remove("hidden");
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add("hidden");
+
+  projects.forEach(function (project) {
+    var clone = document.importNode(template.content, true);
+    var card  = clone.querySelector(".project-card");
+
+    // data attribute
+    card.dataset.projectId = project.id;
+
+    // Title (textContent — safe)
+    var titleEl = clone.querySelector(".project-card-title");
+    if (titleEl) titleEl.textContent = project.title;
+
+    // Description
+    var descEl = clone.querySelector(".project-card-description");
+    if (descEl) descEl.textContent = project.description || "";
+
+    // Status badge
+    var statusBadge = clone.querySelector(".project-card-status-badge");
+    if (statusBadge) {
+      statusBadge.textContent = formatStatus(project.status);
+      applyStatusClass(statusBadge, project.status);
+    }
+
+    // Priority badge
+    var priorityBadge = clone.querySelector(".project-card-priority-badge");
+    if (priorityBadge) {
+      priorityBadge.textContent = capitalize(project.priority);
+      applyPriorityClass(priorityBadge, project.priority);
+    }
+
+    // Progress
+    var pct = project.progress || 0;
+    var pctEl  = clone.querySelector(".project-card-progress-pct");
+    var barEl  = clone.querySelector(".project-card-progress-bar");
+    if (pctEl)  pctEl.textContent   = pct + "%";
+    if (barEl)  barEl.style.width   = pct + "%";
+
+    // Dates
+    var createdEl = clone.querySelector(".project-card-created-at");
+    var updatedEl = clone.querySelector(".project-card-updated-at");
+    if (createdEl) createdEl.textContent = formatDate(project.createdAt);
+    if (updatedEl) updatedEl.textContent = formatDate(project.updatedAt);
+
+    // Delete button data attributes
+    var delBtn = clone.querySelector("[data-action='delete-project']");
+    if (delBtn) delBtn.dataset.projectId = project.id;
+
+    // Click on card body (not delete btn) → open edit modal
+    card.addEventListener("click", function (e) {
+      if (e.target.closest("[data-action='delete-project']")) return;
+      openEditProjectModal(project.id);
+    });
+
+    grid.appendChild(clone);
+  });
+}
+
+/* ----- Details table ------------------------------------------------- */
+function renderDetailsTable() {
+  var body    = document.getElementById("details-table-body");
+  var emptyEl = document.getElementById("details-table-empty");
+  var projTpl = document.getElementById("tpl-details-project-row");
+  var taskTpl = document.getElementById("tpl-details-task-row");
+  if (!body || !projTpl || !taskTpl) return;
+
+  // Use ALL projects in the details table (not filtered by search/priority/status)
+  var projects = state.projects;
+
+  while (body.firstChild) body.removeChild(body.firstChild);
+
+  if (projects.length === 0) {
+    if (emptyEl) emptyEl.classList.remove("hidden");
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add("hidden");
+
+  projects.forEach(function (project) {
+    var pClone = document.importNode(projTpl.content, true);
+    var rowEl  = pClone.querySelector(".details-project-row");
+    rowEl.dataset.projectId = project.id;
+
+    // Set all data-project-id attributes inside the row
+    rowEl.querySelectorAll("[data-project-id]").forEach(function (el) {
+      el.dataset.projectId = project.id;
+    });
+
+    // Project title
+    var titleEl = pClone.querySelector(".details-project-title");
+    if (titleEl) titleEl.textContent = project.title;
+
+    // Progress
+    var pct    = project.progress || 0;
+    var pctEl  = pClone.querySelector(".details-project-progress-pct");
+    var barEl  = pClone.querySelector(".details-project-progress-bar");
+    if (pctEl) pctEl.textContent = pct + "%";
+    if (barEl) barEl.style.width = pct + "%";
+
+    // Completed checkbox (checked when 100%)
+    var checkEl = pClone.querySelector(".details-project-completed-check");
+    if (checkEl) checkEl.checked = project.status === "completed";
+
+    // Collapsed state
+    var taskRowsEl = pClone.querySelector(".details-task-rows");
+    if (state.collapsedRows[project.id] && taskRowsEl) {
+      taskRowsEl.classList.add("hidden");
+    }
+
+    // Chevron rotation for collapsed state
+    var chevronEl = pClone.querySelector(".chevron-down");
+    if (chevronEl && state.collapsedRows[project.id]) {
+      chevronEl.style.transform = "rotate(-90deg)";
+    }
+
+    // Render task rows
+    var addTaskTrigger = pClone.querySelector(".details-add-task-trigger");
+    var tasks = project.tasks || [];
+    tasks.forEach(function (task) {
+      var tClone = document.importNode(taskTpl.content, true);
+      var tRow   = tClone.querySelector(".details-task-row");
+      tRow.dataset.taskId = task.id;
+
+      // Set all data-task-id attributes
+      tRow.querySelectorAll("[data-task-id]").forEach(function (el) {
+        el.dataset.taskId = task.id;
+      });
+      // Set all data-project-id attributes inside task row
+      tRow.querySelectorAll("[data-project-id]").forEach(function (el) {
+        el.dataset.projectId = project.id;
+      });
+
+      // Task title
+      var taskTitleEl = tClone.querySelector(".task-title");
+      if (taskTitleEl) taskTitleEl.textContent = task.title;
+
+      // Checkbox
+      var cbEl = tClone.querySelector(".task-completed-checkbox");
+      if (cbEl) {
+        cbEl.checked           = task.completed;
+        cbEl.dataset.taskId    = task.id;
+        cbEl.dataset.projectId = project.id;
+      }
+
+      // Task progress (100 or 0 per task)
+      var tPctEl = tClone.querySelector(".task-progress-pct");
+      var tBarEl = tClone.querySelector(".task-progress-bar");
+      var tPct   = task.completed ? 100 : 0;
+      if (tPctEl) tPctEl.textContent = tPct + "%";
+      if (tBarEl) tBarEl.style.width = tPct + "%";
+
+      // Delete button
+      var delBtn = tClone.querySelector("[data-action='delete-task']");
+      if (delBtn) {
+        delBtn.dataset.taskId    = task.id;
+        delBtn.dataset.projectId = project.id;
+      }
+
+      if (taskRowsEl && addTaskTrigger) {
+        taskRowsEl.insertBefore(tClone, addTaskTrigger);
+      }
+    });
+
+    body.appendChild(pClone);
+  });
+}
+
+/* =========================================================================
+   FILTER HELPERS
+   ========================================================================= */
+
+function filteredProjects() {
+  return state.projects.filter(function (p) {
+    var searchMatch = !state.filterSearch ||
+      p.title.toLowerCase().indexOf(state.filterSearch.toLowerCase()) !== -1 ||
+      (p.description || "").toLowerCase().indexOf(state.filterSearch.toLowerCase()) !== -1;
+    var statusMatch   = state.filterStatus   === "all" || p.status   === state.filterStatus;
+    var priorityMatch = state.filterPriority === "all" || p.priority === state.filterPriority;
+    return searchMatch && statusMatch && priorityMatch;
+  });
+}
+
+/* =========================================================================
+   CRUD OPERATIONS
+   Each mutates via API then refetches getDashboard (matches use-progressions.ts)
+   ========================================================================= */
+
+async function addProject(formData) {
+  if (state.useMock) {
+    // Mock mode: create locally for demo purposes
+    var newProject = Object.assign({}, formData, {
+      id        : "mock-" + Date.now(),
+      progress  : 0,
+      tasks     : [],
+      createdAt : new Date().toISOString(),
+      updatedAt : new Date().toISOString()
+    });
+    state.projects.push(newProject);
+    recalculateMockStats();
+    render();
+    return;
+  }
+  await call("createProject", formData);
+  await loadDashboard();
+}
+
+async function updateProject(id, formData) {
+  if (state.useMock) {
+    var idx = state.projects.findIndex(function (p) { return p.id === id; });
+    if (idx !== -1) {
+      state.projects[idx] = Object.assign({}, state.projects[idx], formData, {
+        updatedAt: new Date().toISOString()
+      });
+      recalculateMockStats();
+      render();
+    }
+    return;
+  }
+  await call("updateProject", Object.assign({ id: id }, formData));
+  await loadDashboard();
+}
+
+async function deleteProject(id) {
+  if (state.useMock) {
+    state.projects = state.projects.filter(function (p) { return p.id !== id; });
+    recalculateMockStats();
+    render();
+    return;
+  }
+  await call("deleteProject", { id: id });
+  await loadDashboard();
+}
+
+async function addTask(projectId, title) {
+  if (state.useMock) {
+    var proj = state.projects.find(function (p) { return p.id === projectId; });
+    if (proj) {
+      proj.tasks = proj.tasks || [];
+      proj.tasks.push({
+        id        : "task-" + Date.now(),
+        projectId : projectId,
+        title     : title,
+        completed : false,
+        createdAt : new Date().toISOString(),
+        updatedAt : new Date().toISOString()
+      });
+      recomputeMockProjectProgress(proj);
+      recalculateMockStats();
+      render();
+    }
+    return;
+  }
+  await call("createTask", { projectId: projectId, title: title });
+  await loadDashboard();
+}
+
+async function updateTask(id, projectId, data) {
+  if (state.useMock) {
+    var proj = state.projects.find(function (p) { return p.id === projectId; });
+    if (proj) {
+      var task = (proj.tasks || []).find(function (t) { return t.id === id; });
+      if (task) {
+        Object.assign(task, data, { updatedAt: new Date().toISOString() });
+        recomputeMockProjectProgress(proj);
+        recalculateMockStats();
+        render();
+      }
+    }
+    return;
+  }
+  await call("updateTask", Object.assign({ id: id }, data));
+  await loadDashboard();
+}
+
+async function deleteTask(id, projectId) {
+  if (state.useMock) {
+    var proj = state.projects.find(function (p) { return p.id === projectId; });
+    if (proj) {
+      proj.tasks = (proj.tasks || []).filter(function (t) { return t.id !== id; });
+      recomputeMockProjectProgress(proj);
+      recalculateMockStats();
+      render();
+    }
+    return;
+  }
+  await call("deleteTask", { id: id });
+  await loadDashboard();
+}
+
+/* =========================================================================
+   MOCK DATA — local recompute helpers (mirrors API_CONTRACT.md rules)
+   ========================================================================= */
+
+function recomputeMockProjectProgress(project) {
+  var tasks     = project.tasks || [];
+  var total     = tasks.length;
+  var completed = tasks.filter(function (t) { return t.completed; }).length;
+  project.progress = total === 0 ? 0 : Math.round(completed / total * 100);
+
+  // Status recompute (only when project has tasks)
+  if (total > 0) {
+    if (completed === 0)     project.status = "not-started";
+    else if (completed === total) project.status = "completed";
+    else                     project.status = "in-progress";
+  }
+}
+
+function recalculateMockStats() {
+  var projects   = state.projects;
+  var total      = projects.length;
+  var completed  = projects.filter(function (p) { return p.status === "completed"; }).length;
+  var inProgress = projects.filter(function (p) { return p.status === "in-progress"; }).length;
+  var avgProgress = total === 0 ? 0 :
+    Math.round(projects.reduce(function (sum, p) { return sum + (p.progress || 0); }, 0) / total);
+  state.stats = { total: total, completed: completed, inProgress: inProgress, avgProgress: avgProgress };
+}
+
+/* =========================================================================
+   MODAL — Add / Edit Project
+   ========================================================================= */
+
+function openAddProjectModal() {
+  setModalMode("add");
+  showModal("modal-project-form");
+}
+
+function openEditProjectModal(projectId) {
+  var project = state.projects.find(function (p) { return p.id === projectId; });
+  if (!project) return;
+  setModalMode("edit", project);
+  showModal("modal-project-form");
+}
+
+function setModalMode(mode, project) {
+  var titleEl    = document.getElementById("modal-form-title");
+  var subtitleEl = document.getElementById("modal-form-subtitle");
+  var labelEl    = document.getElementById("modal-form-submit-label");
+  var idField    = document.getElementById("form-project-id");
+  var titleField = document.getElementById("form-project-title");
+  var descField  = document.getElementById("form-project-description");
+  var statusSel  = document.getElementById("form-project-status");
+  var prioritySel= document.getElementById("form-project-priority");
+  var errEl      = document.getElementById("form-project-error");
+  var titleErrEl = document.getElementById("form-title-error");
+
+  // Clear errors
+  if (errEl)      { errEl.classList.add("hidden");      errEl.textContent = ""; }
+  if (titleErrEl) { titleErrEl.classList.add("hidden"); titleErrEl.textContent = ""; }
+
+  if (mode === "add") {
+    if (titleEl)    titleEl.textContent    = "Add New Progression";
+    if (subtitleEl) subtitleEl.textContent = "Create a new KPI project to track";
+    if (labelEl)    labelEl.textContent    = "Add Project";
+    if (idField)    idField.value          = "";
+    if (titleField) titleField.value       = "";
+    if (descField)  descField.value        = "";
+    if (statusSel)  statusSel.value        = "not-started";
+    if (prioritySel)prioritySel.value      = "medium";
+  } else {
+    if (titleEl)    titleEl.textContent    = "Edit Progression";
+    if (subtitleEl) subtitleEl.textContent = "Update project details";
+    if (labelEl)    labelEl.textContent    = "Save Changes";
+    if (idField)    idField.value          = project.id;
+    if (titleField) titleField.value       = project.title;
+    if (descField)  descField.value        = project.description || "";
+    if (statusSel)  statusSel.value        = project.status;
+    if (prioritySel)prioritySel.value      = project.priority;
+  }
+}
+
+function showModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove("hidden");
+  el.classList.add("flex");
+}
+
+function hideModal(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add("hidden");
+  el.classList.remove("flex");
+}
+
+/* =========================================================================
+   DELETE CONFIRM DIALOG
+   ========================================================================= */
+
+function openDeleteDialog(projectId) {
+  var project = state.projects.find(function (p) { return p.id === projectId; });
+  if (!project) return;
+
+  var nameEl  = document.getElementById("dialog-delete-project-name");
+  var idField = document.getElementById("dialog-delete-project-id");
+  var errEl   = document.getElementById("dialog-delete-error");
+
+  if (nameEl)  nameEl.textContent = project.title; // safe — textContent
+  if (idField) idField.value      = projectId;
+  if (errEl)   { errEl.classList.add("hidden"); errEl.textContent = ""; }
+
+  showModal("dialog-delete-confirm");
+}
+
+/* =========================================================================
+   EVENT DELEGATION — document-level click handler
+   ========================================================================= */
+
+function wireStaticUI() {
+  // Delegated clicks
+  document.addEventListener("click", handleDelegatedClick);
+
+  // Project form submit
+  var formProject = document.getElementById("form-project");
+  if (formProject) formProject.addEventListener("submit", handleProjectFormSubmit);
+
+  // Filters
+  var filterSearch   = document.getElementById("filter-search");
+  var filterStatus   = document.getElementById("filter-status");
+  var filterPriority = document.getElementById("filter-priority");
+  if (filterSearch) {
+    filterSearch.addEventListener("input", function () {
+      state.filterSearch = this.value;
+      renderProjectCards();
+    });
+  }
+  if (filterStatus) {
+    filterStatus.addEventListener("change", function () {
+      state.filterStatus = this.value;
+      renderProjectCards();
+    });
+  }
+  if (filterPriority) {
+    filterPriority.addEventListener("change", function () {
+      state.filterPriority = this.value;
+      renderProjectCards();
+    });
+  }
+
+  // Logout button
+  var btnLogout = document.getElementById("btn-logout");
+  if (btnLogout) btnLogout.addEventListener("click", function () { logout(); });
+}
+
+function handleDelegatedClick(e) {
+  var target = e.target;
+
+  // -------------------------------------------------------------------
+  // Add Project buttons (two of them: toolbar + details header)
+  // -------------------------------------------------------------------
+  if (target.id === "btn-add-project" || target.closest("#btn-add-project") ||
+      target.id === "btn-details-new-project" || target.closest("#btn-details-new-project")) {
+    openAddProjectModal();
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Modal / dialog close actions
+  // -------------------------------------------------------------------
+  var action = target.dataset.action || (target.closest("[data-action]") && target.closest("[data-action]").dataset.action);
+
+  if (action === "close-modal-form") {
+    hideModal("modal-project-form");
+    return;
+  }
+  if (action === "close-dialog-delete") {
+    hideModal("dialog-delete-confirm");
+    return;
+  }
+
+  // Clicking the modal backdrop closes it
+  if (target.classList.contains("modal-backdrop")) {
+    hideModal("modal-project-form");
+    return;
+  }
+  if (target.classList.contains("dialog-backdrop")) {
+    hideModal("dialog-delete-confirm");
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Delete project (card delete button)
+  // -------------------------------------------------------------------
+  var delProjectBtn = target.closest("[data-action='delete-project']");
+  if (delProjectBtn) {
+    e.stopPropagation();
+    openDeleteDialog(delProjectBtn.dataset.projectId);
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Confirm delete
+  // -------------------------------------------------------------------
+  if (action === "confirm-delete") {
+    handleConfirmDelete();
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Toggle details row (expand / collapse)
+  // -------------------------------------------------------------------
+  var toggleRowEl = target.closest("[data-action='toggle-project-row']");
+  if (toggleRowEl) {
+    var pid = toggleRowEl.dataset.projectId;
+    state.collapsedRows[pid] = !state.collapsedRows[pid];
+    // Find the task rows container and toggle visibility
+    var detailsRow = document.querySelector(".details-project-row[data-project-id='" + pid + "']");
+    if (detailsRow) {
+      var taskRowsEl = detailsRow.querySelector(".details-task-rows");
+      var chevronEl  = detailsRow.querySelector(".chevron-down");
+      if (taskRowsEl) taskRowsEl.classList.toggle("hidden", !!state.collapsedRows[pid]);
+      if (chevronEl)  chevronEl.style.transform = state.collapsedRows[pid] ? "rotate(-90deg)" : "";
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Show add-task input
+  // -------------------------------------------------------------------
+  var showAddTaskBtn = target.closest("[data-action='show-add-task-input']");
+  if (showAddTaskBtn) {
+    var apid = showAddTaskBtn.dataset.projectId;
+    var detRow = document.querySelector(".details-project-row[data-project-id='" + apid + "']");
+    if (detRow) {
+      var trigger = detRow.querySelector(".details-add-task-trigger");
+      if (trigger) {
+        var addBtn   = trigger.querySelector(".details-add-task-btn");
+        var addForm  = trigger.querySelector(".details-add-task-form");
+        var addInput = trigger.querySelector(".details-new-task-input");
+        if (addBtn)   addBtn.classList.add("hidden");
+        if (addForm)  addForm.classList.remove("hidden");
+        if (addInput) addInput.focus();
+      }
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Confirm add task
+  // -------------------------------------------------------------------
+  var confirmAddBtn = target.closest("[data-action='confirm-add-task']");
+  if (confirmAddBtn) {
+    handleConfirmAddTask(confirmAddBtn.dataset.projectId);
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Cancel add task
+  // -------------------------------------------------------------------
+  var cancelAddBtn = target.closest("[data-action='cancel-add-task']");
+  if (cancelAddBtn) {
+    var capid  = cancelAddBtn.dataset.projectId;
+    var caDetRow = document.querySelector(".details-project-row[data-project-id='" + capid + "']");
+    if (caDetRow) {
+      var caTrigger = caDetRow.querySelector(".details-add-task-trigger");
+      if (caTrigger) {
+        var caAddBtn  = caTrigger.querySelector(".details-add-task-btn");
+        var caAddForm = caTrigger.querySelector(".details-add-task-form");
+        var caInput   = caTrigger.querySelector(".details-new-task-input");
+        if (caAddBtn)  caAddBtn.classList.remove("hidden");
+        if (caAddForm) caAddForm.classList.add("hidden");
+        if (caInput)   caInput.value = "";
+      }
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Delete task
+  // -------------------------------------------------------------------
+  var delTaskBtn = target.closest("[data-action='delete-task']");
+  if (delTaskBtn) {
+    e.stopPropagation();
+    handleDeleteTask(delTaskBtn.dataset.taskId, delTaskBtn.dataset.projectId);
+    return;
+  }
+
+  // -------------------------------------------------------------------
+  // Toggle task complete (checkbox — also fires change, handled separately)
+  // -------------------------------------------------------------------
+}
+
+/* =========================================================================
+   KEYBOARD — Enter key on new-task-input
+   ========================================================================= */
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Enter") return;
+  var input = e.target.closest(".details-new-task-input");
+  if (!input) return;
+  e.preventDefault();
+  handleConfirmAddTask(input.dataset.projectId);
+});
+
+/* =========================================================================
+   CHANGE — task checkbox
+   ========================================================================= */
+document.addEventListener("change", function (e) {
+  var cb = e.target.closest(".task-completed-checkbox");
+  if (!cb) return;
+  handleToggleTask(cb.dataset.taskId, cb.dataset.projectId, cb.checked);
+});
+
+/* =========================================================================
+   ACTION HANDLERS
+   ========================================================================= */
+
+async function handleProjectFormSubmit(e) {
+  e.preventDefault();
+  var idField     = document.getElementById("form-project-id");
+  var titleField  = document.getElementById("form-project-title");
+  var descField   = document.getElementById("form-project-description");
+  var statusSel   = document.getElementById("form-project-status");
+  var prioritySel = document.getElementById("form-project-priority");
+  var errEl       = document.getElementById("form-project-error");
+  var titleErrEl  = document.getElementById("form-title-error");
+  var spinner     = document.getElementById("modal-form-submit-spinner");
+  var submitBtn   = document.getElementById("modal-form-submit-btn");
+
+  // Clear errors
+  if (errEl)      { errEl.classList.add("hidden");      errEl.textContent = ""; }
+  if (titleErrEl) { titleErrEl.classList.add("hidden"); titleErrEl.textContent = ""; }
+
+  var title = titleField ? titleField.value.trim() : "";
+  if (!title) {
+    if (titleErrEl) { titleErrEl.textContent = "Title is required."; titleErrEl.classList.remove("hidden"); }
+    return;
+  }
+
+  var formData = {
+    title      : title,
+    description: descField   ? descField.value.trim()  : "",
+    status     : statusSel   ? statusSel.value          : "not-started",
+    priority   : prioritySel ? prioritySel.value        : "medium"
+  };
+
+  var projectId = idField ? idField.value : "";
+  var isEdit    = !!projectId;
+
+  // Disable form
+  if (spinner)   spinner.classList.remove("hidden");
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    if (isEdit) {
+      await updateProject(projectId, formData);
+    } else {
+      await addProject(formData);
+    }
+    hideModal("modal-project-form");
+  } catch (err) {
+    if (errEl) { errEl.textContent = err.message || "Save failed."; errEl.classList.remove("hidden"); }
+  } finally {
+    if (spinner)   spinner.classList.add("hidden");
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+async function handleConfirmDelete() {
+  var idField = document.getElementById("dialog-delete-project-id");
+  var errEl   = document.getElementById("dialog-delete-error");
+  var spinner = document.getElementById("dialog-delete-spinner");
+  var confirmBtn = document.getElementById("dialog-delete-confirm-btn");
+
+  var projectId = idField ? idField.value : "";
+  if (!projectId) return;
+
+  if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
+  if (spinner)    spinner.classList.remove("hidden");
+  if (confirmBtn) confirmBtn.disabled = true;
+
+  try {
+    await deleteProject(projectId);
+    hideModal("dialog-delete-confirm");
+  } catch (err) {
+    if (errEl) { errEl.textContent = err.message || "Delete failed."; errEl.classList.remove("hidden"); }
+  } finally {
+    if (spinner)    spinner.classList.add("hidden");
+    if (confirmBtn) confirmBtn.disabled = false;
+  }
+}
+
+async function handleConfirmAddTask(projectId) {
+  if (!projectId) return;
+  var detRow = document.querySelector(".details-project-row[data-project-id='" + projectId + "']");
+  if (!detRow) return;
+  var trigger = detRow.querySelector(".details-add-task-trigger");
+  if (!trigger) return;
+  var addInput  = trigger.querySelector(".details-new-task-input");
+  var title = addInput ? addInput.value.trim() : "";
+  if (!title) { if (addInput) addInput.focus(); return; }
+
+  try {
+    await addTask(projectId, title);
+    // render() will rebuild the DOM
+  } catch (err) {
+    showGlobalError(err.message || "Failed to add task");
+  }
+}
+
+async function handleToggleTask(taskId, projectId, completed) {
+  try {
+    await updateTask(taskId, projectId, { completed: completed });
+  } catch (err) {
+    showGlobalError(err.message || "Failed to update task");
+    render(); // revert checkbox visually
+  }
+}
+
+async function handleDeleteTask(taskId, projectId) {
+  try {
+    await deleteTask(taskId, projectId);
+  } catch (err) {
+    showGlobalError(err.message || "Failed to delete task");
+  }
+}
+
+/* =========================================================================
+   UTILITY HELPERS
+   ========================================================================= */
+
+function setTextById(id, text) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function formatDate(isoString) {
+  if (!isoString) return "—";
+  try {
+    var d = new Date(isoString);
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  } catch (e) { return isoString; }
+}
+
+function formatStatus(status) {
+  var map = {
+    "not-started" : "Not Started",
+    "in-progress" : "In Progress",
+    "completed"   : "Completed",
+    "on-hold"     : "On Hold"
+  };
+  return map[status] || capitalize(status);
+}
+
+function capitalize(str) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function applyStatusClass(el, status) {
+  el.className = el.className.replace(/\bbg-\S+\b/g, "").replace(/\btext-\S+\b/g, "").trim();
+  var map = {
+    "not-started" : "bg-slate-100 text-slate-600",
+    "in-progress" : "bg-amber-100 text-amber-700",
+    "completed"   : "bg-emerald-100 text-emerald-700",
+    "on-hold"     : "bg-red-100 text-red-700"
+  };
+  var classes = (map[status] || "bg-slate-100 text-slate-600").split(" ");
+  classes.forEach(function (c) { el.classList.add(c); });
+}
+
+function applyPriorityClass(el, priority) {
+  el.className = el.className.replace(/\bbg-\S+\b/g, "").replace(/\btext-\S+\b/g, "").trim();
+  var map = {
+    "high"   : "bg-red-100 text-red-700",
+    "medium" : "bg-amber-100 text-amber-700",
+    "low"    : "bg-slate-100 text-slate-600"
+  };
+  var classes = (map[priority] || "bg-slate-100 text-slate-600").split(" ");
+  classes.forEach(function (c) { el.classList.add(c); });
+}
