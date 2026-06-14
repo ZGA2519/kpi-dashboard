@@ -32,6 +32,15 @@ var state = {
 };
 
 /* =========================================================================
+   SYNC STATE — local-first queue flushed every 5 min or on button press
+   ========================================================================= */
+var pendingOps    = [];   // [{action, payload, tempId?}]
+var isSyncing     = false;
+var lastSyncedAt  = null;
+var autoSyncId    = null;
+var SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+/* =========================================================================
    GUARD — exit on login page (auth.js handles that page's logic)
    ========================================================================= */
 (function () {
@@ -64,6 +73,9 @@ async function init() {
 
   // Load data
   await loadDashboard();
+
+  startAutoSync();
+  updateSyncUI();
 }
 
 /* =========================================================================
@@ -75,8 +87,8 @@ async function init() {
  * Fetches getDashboard from the API (or falls back to mock data).
  * Updates state and calls render().
  */
-async function loadDashboard() {
-  setLoading(true, "Loading dashboard…");
+async function loadDashboard(quiet) {
+  if (!quiet) setLoading(true, "Loading dashboard…");
 
   try {
     var data = await call("getDashboard");
@@ -154,6 +166,18 @@ function showGlobalError(msg) {
   showGlobalError._timer = setTimeout(function () {
     banner.classList.add("hidden");
   }, 5000);
+}
+
+function showGlobalSuccess(msg) {
+  var banner = document.getElementById("global-success-banner");
+  var text   = document.getElementById("global-success-text");
+  if (!banner || !text) return;
+  text.textContent = msg;
+  banner.classList.remove("hidden");
+  clearTimeout(showGlobalSuccess._timer);
+  showGlobalSuccess._timer = setTimeout(function () {
+    banner.classList.add("hidden");
+  }, 3000);
 }
 
 /* =========================================================================
@@ -388,7 +412,6 @@ function filteredProjects() {
 
 async function addProject(formData) {
   if (state.useMock) {
-    // Mock mode: create locally for demo purposes
     var newProject = Object.assign({}, formData, {
       id        : "mock-" + Date.now(),
       progress  : 0,
@@ -401,8 +424,18 @@ async function addProject(formData) {
     render();
     return;
   }
-  await call("createProject", formData);
-  await loadDashboard();
+  // Local-first: apply immediately, queue API call
+  var tempId = "local-proj-" + Date.now();
+  state.projects.push(Object.assign({}, formData, {
+    id        : tempId,
+    progress  : 0,
+    tasks     : [],
+    createdAt : new Date().toISOString(),
+    updatedAt : new Date().toISOString()
+  }));
+  recalculateMockStats();
+  render();
+  enqueuePendingOp({ action: "createProject", payload: formData, tempId: tempId });
 }
 
 async function updateProject(id, formData) {
@@ -417,8 +450,16 @@ async function updateProject(id, formData) {
     }
     return;
   }
-  await call("updateProject", Object.assign({ id: id }, formData));
-  await loadDashboard();
+  // Local-first
+  var idx = state.projects.findIndex(function (p) { return p.id === id; });
+  if (idx !== -1) {
+    state.projects[idx] = Object.assign({}, state.projects[idx], formData, {
+      updatedAt: new Date().toISOString()
+    });
+    recalculateMockStats();
+    render();
+  }
+  enqueuePendingOp({ action: "updateProject", payload: Object.assign({ id: id }, formData) });
 }
 
 async function deleteProject(id) {
@@ -428,8 +469,20 @@ async function deleteProject(id) {
     render();
     return;
   }
-  await call("deleteProject", { id: id });
-  await loadDashboard();
+  // Local-first: remove immediately
+  state.projects = state.projects.filter(function (p) { return p.id !== id; });
+  recalculateMockStats();
+  render();
+  // If project was never synced, cancel its pending ops instead of queuing a delete
+  if (id.indexOf("local-proj-") === 0) {
+    pendingOps = pendingOps.filter(function (op) {
+      return !(op.tempId === id ||
+               (op.payload && (op.payload.id === id || op.payload.projectId === id)));
+    });
+    updateSyncUI();
+    return;
+  }
+  enqueuePendingOp({ action: "deleteProject", payload: { id: id } });
 }
 
 async function addTask(projectId, title) {
@@ -451,8 +504,24 @@ async function addTask(projectId, title) {
     }
     return;
   }
-  await call("createTask", { projectId: projectId, title: title });
-  await loadDashboard();
+  // Local-first
+  var proj = state.projects.find(function (p) { return p.id === projectId; });
+  if (proj) {
+    var tempTaskId = "local-task-" + Date.now();
+    proj.tasks = proj.tasks || [];
+    proj.tasks.push({
+      id        : tempTaskId,
+      projectId : projectId,
+      title     : title,
+      completed : false,
+      createdAt : new Date().toISOString(),
+      updatedAt : new Date().toISOString()
+    });
+    recomputeMockProjectProgress(proj);
+    recalculateMockStats();
+    render();
+    enqueuePendingOp({ action: "createTask", payload: { projectId: projectId, title: title }, tempId: tempTaskId });
+  }
 }
 
 async function updateTask(id, projectId, data) {
@@ -469,8 +538,18 @@ async function updateTask(id, projectId, data) {
     }
     return;
   }
-  await call("updateTask", Object.assign({ id: id }, data));
-  await loadDashboard();
+  // Local-first
+  var proj = state.projects.find(function (p) { return p.id === projectId; });
+  if (proj) {
+    var task = (proj.tasks || []).find(function (t) { return t.id === id; });
+    if (task) {
+      Object.assign(task, data, { updatedAt: new Date().toISOString() });
+      recomputeMockProjectProgress(proj);
+      recalculateMockStats();
+      render();
+    }
+  }
+  enqueuePendingOp({ action: "updateTask", payload: Object.assign({ id: id }, data) });
 }
 
 async function deleteTask(id, projectId) {
@@ -484,8 +563,23 @@ async function deleteTask(id, projectId) {
     }
     return;
   }
-  await call("deleteTask", { id: id });
-  await loadDashboard();
+  // Local-first: remove immediately
+  var proj = state.projects.find(function (p) { return p.id === projectId; });
+  if (proj) {
+    proj.tasks = (proj.tasks || []).filter(function (t) { return t.id !== id; });
+    recomputeMockProjectProgress(proj);
+    recalculateMockStats();
+    render();
+  }
+  // If task was never synced, cancel its pending ops instead of queuing a delete
+  if (id.indexOf("local-task-") === 0) {
+    pendingOps = pendingOps.filter(function (op) {
+      return !(op.tempId === id || (op.payload && op.payload.id === id));
+    });
+    updateSyncUI();
+    return;
+  }
+  enqueuePendingOp({ action: "deleteTask", payload: { id: id } });
 }
 
 /* =========================================================================
@@ -514,6 +608,191 @@ function recalculateMockStats() {
   var avgProgress = total === 0 ? 0 :
     Math.round(projects.reduce(function (sum, p) { return sum + (p.progress || 0); }, 0) / total);
   state.stats = { total: total, completed: completed, inProgress: inProgress, avgProgress: avgProgress };
+}
+
+/* =========================================================================
+   SYNC ENGINE — local-first queue, flush every 5 min or on button press
+   ========================================================================= */
+
+function enqueuePendingOp(op) {
+  // For updates, replace any existing op for the same entity so rapid
+  // check → uncheck collapses to a single final-state write.
+  if (op.action === "updateTask" || op.action === "updateProject") {
+    var entityId = op.payload && op.payload.id;
+    for (var i = 0; i < pendingOps.length; i++) {
+      if (pendingOps[i].action === op.action && pendingOps[i].payload && pendingOps[i].payload.id === entityId) {
+        pendingOps[i] = op; // replace with latest value
+        updateSyncUI();
+        return;
+      }
+    }
+  }
+  pendingOps.push(op);
+  updateSyncUI();
+}
+
+function startAutoSync() {
+  if (autoSyncId) clearInterval(autoSyncId);
+  autoSyncId = setInterval(function () {
+    if (!state.useMock && !isSyncing) syncNow();
+  }, SYNC_INTERVAL);
+
+  // Refresh "last synced X ago" text every 30 s
+  setInterval(function () {
+    if (lastSyncedAt) updateSyncUI();
+  }, 30000);
+}
+
+async function syncNow() {
+  if (state.useMock) return;
+  if (isSyncing) return;
+  if (pendingOps.length === 0) {
+    // Nothing pending — just reconcile with server quietly
+    await loadDashboard(true);
+    lastSyncedAt = new Date();
+    updateSyncUI();
+    return;
+  }
+
+  isSyncing = true;
+  updateSyncUI();
+
+  var opsToProcess = pendingOps.slice();
+  pendingOps = [];
+
+  // Split into creates (must be sequential — we need real IDs to remap) and
+  // everything else (updates/deletes — independent, can run in parallel).
+  var creates = opsToProcess.filter(function (op) {
+    return op.action === "createProject" || op.action === "createTask";
+  });
+  var rest = opsToProcess.filter(function (op) {
+    return op.action !== "createProject" && op.action !== "createTask";
+  });
+  var failed = [];
+
+  try {
+    // 1. Creates — sequential so each real ID is available before the next
+    for (var i = 0; i < creates.length; i++) {
+      var op = creates[i];
+      try {
+        var result = await call(op.action, op.payload);
+        if (op.tempId && result && result.id) {
+          remapTempId(creates, i + 1, op.tempId, result.id);
+          remapTempId(rest, 0, op.tempId, result.id);
+          remapTempId(pendingOps, 0, op.tempId, result.id);
+          remapTempIdInState(op.tempId, result.id);
+        }
+      } catch (createErr) {
+        failed.push(op);
+        // Drop any rest ops that depend on this unresolved temp ID
+        if (op.tempId) {
+          rest = rest.filter(function (o) {
+            return !(o.payload && (o.payload.id === op.tempId || o.payload.projectId === op.tempId));
+          });
+        }
+      }
+    }
+
+    // 2. Updates / deletes — fire in parallel
+    var settled = await Promise.allSettled(rest.map(function (op) {
+      return call(op.action, op.payload);
+    }));
+    settled.forEach(function (outcome, idx) {
+      if (outcome.status === "rejected") failed.push(rest[idx]);
+    });
+
+    if (failed.length > 0) {
+      pendingOps = failed.concat(pendingOps);
+      showGlobalError(failed.length + " change(s) failed to sync — will retry");
+    }
+
+    // Reconcile with server (quiet — no loading overlay)
+    await loadDashboard(true);
+    lastSyncedAt = new Date();
+    if (failed.length === 0) showGlobalSuccess("All changes synced successfully");
+  } catch (err) {
+    // Unexpected failure — restore everything
+    pendingOps = opsToProcess.concat(pendingOps);
+    showGlobalError("Sync failed: " + (err.message || "Unknown error"));
+  } finally {
+    isSyncing = false;
+    updateSyncUI();
+  }
+}
+
+function remapTempId(ops, startIdx, tempId, realId) {
+  for (var i = startIdx; i < ops.length; i++) {
+    var op = ops[i];
+    if (op.tempId === tempId) op.tempId = realId;
+    if (op.payload) {
+      if (op.payload.id === tempId)        op.payload.id        = realId;
+      if (op.payload.projectId === tempId) op.payload.projectId = realId;
+    }
+  }
+}
+
+function remapTempIdInState(tempId, realId) {
+  state.projects.forEach(function (p) {
+    if (p.id === tempId) p.id = realId;
+    (p.tasks || []).forEach(function (t) {
+      if (t.id === tempId)        t.id        = realId;
+      if (t.projectId === tempId) t.projectId = realId;
+    });
+  });
+}
+
+function updateSyncUI() {
+  var btn     = document.getElementById("btn-sync");
+  var spinner = document.getElementById("sync-spinner");
+  var icon    = document.getElementById("sync-icon");
+  var label   = document.getElementById("sync-label");
+  var badge   = document.getElementById("sync-badge");
+  var status  = document.getElementById("sync-status");
+  if (!btn) return;
+
+  if (state.useMock) {
+    btn.classList.add("hidden");
+    if (status) status.classList.add("hidden");
+    return;
+  }
+
+  btn.classList.remove("hidden");
+
+  if (isSyncing) {
+    btn.disabled = true;
+    if (spinner) spinner.classList.remove("hidden");
+    if (icon)    icon.classList.add("hidden");
+    if (label)   label.textContent = "Syncing…";
+    if (badge)   badge.classList.add("hidden");
+  } else {
+    btn.disabled = false;
+    if (spinner) spinner.classList.add("hidden");
+    if (icon)    icon.classList.remove("hidden");
+    if (label)   label.textContent = "Sync Data";
+
+    var count = pendingOps.length;
+    if (count > 0 && badge) {
+      badge.textContent = count > 9 ? "9+" : String(count);
+      badge.classList.remove("hidden");
+    } else if (badge) {
+      badge.classList.add("hidden");
+    }
+  }
+
+  if (status) {
+    if (isSyncing) {
+      status.textContent = "Syncing…";
+      status.classList.remove("hidden");
+    } else if (lastSyncedAt) {
+      status.textContent = "Synced " + formatTimeAgo(lastSyncedAt);
+      status.classList.remove("hidden");
+    } else if (pendingOps.length > 0) {
+      status.textContent = "Unsaved changes";
+      status.classList.remove("hidden");
+    } else {
+      status.classList.add("hidden");
+    }
+  }
 }
 
 /* =========================================================================
@@ -640,6 +919,18 @@ function wireStaticUI() {
   // Logout button
   var btnLogout = document.getElementById("btn-logout");
   if (btnLogout) btnLogout.addEventListener("click", function () { logout(); });
+
+  // Sync button
+  var btnSync = document.getElementById("btn-sync");
+  if (btnSync) btnSync.addEventListener("click", function () { syncNow(); });
+
+  // Warn before unload when there are unsaved changes
+  window.addEventListener("beforeunload", function (e) {
+    if (pendingOps.length > 0) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
 }
 
 function handleDelegatedClick(e) {
@@ -956,6 +1247,13 @@ function applyStatusClass(el, status) {
   };
   var classes = (map[status] || "bg-slate-100 text-slate-600").split(" ");
   classes.forEach(function (c) { el.classList.add(c); });
+}
+
+function formatTimeAgo(date) {
+  var diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 60)   return "just now";
+  if (diffSec < 3600) return Math.floor(diffSec / 60) + "m ago";
+  return Math.floor(diffSec / 3600) + "h ago";
 }
 
 function applyPriorityClass(el, priority) {

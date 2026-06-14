@@ -127,6 +127,15 @@
   </div>
 
   <!-- =========================================================
+       GLOBAL SUCCESS BANNER
+       ========================================================= -->
+  <div id="global-success-banner"
+       class="hidden fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-emerald-50 px-5 py-3 shadow-md border border-emerald-200"
+       role="status">
+    <p id="global-success-text" class="text-sm text-emerald-700"></p>
+  </div>
+
+  <!-- =========================================================
        MAIN APP WRAPPER
        ========================================================= -->
   <div id="app" class="hidden min-h-screen bg-slate-50">
@@ -150,6 +159,28 @@
         </div>
         <div class="flex items-center gap-3">
           <span id="header-username" class="hidden text-sm text-slate-500"></span>
+          <!-- Sync status + button -->
+          <span id="sync-status" class="hidden text-xs text-slate-400 whitespace-nowrap"></span>
+          <button id="btn-sync"
+                  class="hidden relative flex items-center gap-1.5 rounded-md border border-slate-300 bg-white
+                         px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50
+                         focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-60">
+            <!-- Spinner (shown while syncing) -->
+            <span id="sync-spinner"
+                  class="hidden h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600"></span>
+            <!-- Sync icon (shown when idle) -->
+            <svg id="sync-icon" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/>
+              <polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            <span id="sync-label">Sync Data</span>
+            <!-- Pending-changes badge -->
+            <span id="sync-badge"
+                  class="hidden absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center
+                         rounded-full bg-amber-500 px-1 text-xs font-bold text-white leading-none"></span>
+          </button>
           <button id="btn-logout"
                   class="hidden rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700
                          hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400">
