@@ -88,7 +88,7 @@ async function init() {
  * Updates state and calls render().
  */
 async function loadDashboard(quiet) {
-  if (!quiet) setLoading(true, "Loading dashboard…");
+  if (!quiet) setLoading(true);
 
   try {
     var data = await call("getDashboard");
@@ -140,13 +140,10 @@ function isAuthError(err) {
    LOADING / ERROR UI HELPERS
    ========================================================================= */
 
-function setLoading(isLoading, msg) {
+function setLoading(isLoading) {
   state.isLoading = isLoading;
   var overlay = document.getElementById("loading-overlay");
-  var loadMsg = document.getElementById("loading-message");
-  if (!overlay) return;
-  overlay.classList.toggle("hidden", !isLoading);
-  if (msg && loadMsg) loadMsg.textContent = msg;
+  if (overlay) overlay.classList.toggle("hidden", !isLoading);
 }
 
 function showAuthGuard() {
