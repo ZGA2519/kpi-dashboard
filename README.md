@@ -1,11 +1,5 @@
 # KPI Dashboard
 
-> [!CAUTION]
-> **DEPRECATED:** This project has been succeeded by [KPI](https://github.com/Houston-Space-Center/kpi). 
-> Please use the new repository for the latest features and bug fixes.
-
----
-
 ## Static + Sheets Edition
 
 This branch contains a rewrite that replaces the Next.js/Prisma stack with a
